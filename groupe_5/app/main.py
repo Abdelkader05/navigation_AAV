@@ -3,9 +3,53 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from contextlib import asynccontextmanager
+from app.database import DatabaseError, init_database
+from app.routers import aavs  # Chaque groupe importe ses routers
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Gestion du cycle de vie de l'application."""
+    # Startup: initialisation
+    print("🚀 Initialisation de la base de données...")
+    init_database()
+    yield
+    # Shutdown: nettoyage
+    print("🛑 Arrêt du serveur")
 
+
+
+app = FastAPI(
+    title="PlatonAAV API",
+    description="""
+    API REST pour la gestion des Acquis d'Apprentissage Visés (AAV).
+
+    ## Groupes
+
+    * **AAVs** - Gestion des acquis (Groupe 1)
+    * **Learners** - Gestion des apprenants (Groupe 2)
+    * etc.
+    """,
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Inclusion des routers
+app.include_router(aavs.router)
+# app.include_router(learners.router)  # Décommenter selon le groupe
+
+@app.get("/")
+def root():
+    return {
+        "message": "Bienvenue sur l'API PlatonAAV",
+        "documentation": "/docs",
+        "version": "1.0.0"
+    }
+
+@app.get("/health")
+def health_check():
+    """Endpoint pour vérifier que le serveur fonctionne."""
+    return {"status": "healthy", "database": "connected"}
 # ============================================
 # GESTIONNAIRES D'EXCEPTIONS GLOBAUX
 # ============================================
@@ -73,51 +117,3 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 
 
-
-from fastapi import FastAPI
-from contextlib import asynccontextmanager
-
-from app.database import init_database
-from app.routers import aavs  # Chaque groupe importe ses routers
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Gestion du cycle de vie de l'application."""
-    # Startup: initialisation
-    print("🚀 Initialisation de la base de données...")
-    init_database()
-    yield
-    # Shutdown: nettoyage
-    print("🛑 Arrêt du serveur")
-
-app = FastAPI(
-    title="PlatonAAV API",
-    description="""
-    API REST pour la gestion des Acquis d'Apprentissage Visés (AAV).
-
-    ## Groupes
-
-    * **AAVs** - Gestion des acquis (Groupe 1)
-    * **Learners** - Gestion des apprenants (Groupe 2)
-    * etc.
-    """,
-    version="1.0.0",
-    lifespan=lifespan
-)
-
-# Inclusion des routers
-app.include_router(aavs.router)
-# app.include_router(learners.router)  # Décommenter selon le groupe
-
-@app.get("/")
-def root():
-    return {
-        "message": "Bienvenue sur l'API PlatonAAV",
-        "documentation": "/docs",
-        "version": "1.0.0"
-    }
-
-@app.get("/health")
-def health_check():
-    """Endpoint pour vérifier que le serveur fonctionne."""
-    return {"status": "healthy", "database": "connected"}
