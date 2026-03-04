@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import List, Optional
 from app.models import AAV, AAVCreate, AAVUpdate, PaginatedResponse
-from app.database import get_db_connection, BaseRepository, to_json
+from app.database import get_db_connection, from_json, BaseRepository, to_json
 import sqlite3
 
 router = APIRouter(
@@ -110,7 +110,17 @@ def list_aavs(
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
-        return [AAV(**dict(row)) for row in rows]
+        result = []
+
+        for row in rows:
+            data = dict(row)
+
+            data["prerequis_ids"] = from_json(data["prerequis_ids"]) or []
+            data["prerequis_externes_codes"] = from_json(data.get("prerequis_externes_codes")) or []
+
+            result.append(AAV(**data))
+
+        return result
 
 @router.get("/{id_aav}", response_model=AAV)
 def get_aav(id_aav: int):
@@ -120,6 +130,10 @@ def get_aav(id_aav: int):
     data = repo.get_by_id(id_aav)
     if not data:
         raise HTTPException(status_code=404, detail="AAV non trouvé")
+    
+    data["prerequis_ids"] = from_json(data["prerequis_ids"]) or []
+    data["prerequis_externes_codes"] = from_json(data.get("prerequis_externes_codes")) or []
+
     return AAV(**data)
 
 @router.post("/", response_model=AAV, status_code=201)
@@ -138,6 +152,10 @@ def create_aav(aav: AAVCreate):
     try:
         repo.create(aav.model_dump())
         created = repo.get_by_id(aav.id_aav)
+
+        created["prerequis_ids"] = from_json(created["prerequis_ids"]) or []
+        created["prerequis_externes_codes"] = from_json(created.get("prerequis_externes_codes")) or []
+
         return AAV(**created)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -178,6 +196,10 @@ def update_aav_partial(id_aav: int, aav: AAVUpdate):
         repo.update(id_aav, update_data)
 
     updated = repo.get_by_id(id_aav)
+
+    updated["prerequis_ids"] = from_json(updated["prerequis_ids"])
+    updated["prerequis_externes_codes"] = from_json(updated.get("prerequis_externes_codes")) or []
+
     return AAV(**updated)
 
 @router.delete("/{id_aav}", status_code=204)

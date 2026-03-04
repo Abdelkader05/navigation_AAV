@@ -6,6 +6,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 from app.database import DatabaseError, init_database
 from app.routers import aavs  # Chaque groupe importe ses routers
+from app.routers import navigation
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,6 +38,7 @@ app = FastAPI(
 
 # Inclusion des routers
 app.include_router(aavs.router)
+app.include_router(navigation.router)
 # app.include_router(learners.router)  # Décommenter selon le groupe
 
 @app.get("/")
