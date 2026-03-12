@@ -12,7 +12,7 @@ if os.path.exists('platonAAV.db'):
 init_database()
 
 
-with open("../RessourcesCommunes-20260304/donnees_test.sql", "r") as f:
+with open("/RessourcesCommunes/donnees_test.sql", "r") as f:
     sql_script = f.read()
 
 
