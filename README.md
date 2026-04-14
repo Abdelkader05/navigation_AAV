@@ -71,5 +71,5 @@ pytest
 pytest --cov=app --cov-report=html
 
 # Tests d'un fichier spécifique
-pytest tests/test_navigation.py -v
+pytest tests/test_profond.py -v
 ```

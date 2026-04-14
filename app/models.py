@@ -148,3 +148,54 @@ class SuccessResponse(BaseModel):
     message: str
     id: Optional[int] = None
     data: Optional[dict] = None
+
+
+# ============================================
+# MODÈLES GROUPE 6: REMÉDIATION // POST du cahier de charges
+# ============================================
+
+class TriggerRemediation(BaseModel):
+    """Méthode pour déclencher une analyse de remédiation."""
+    id_apprenant: int = Field(..., description="ID de l'apprenant")
+    id_aav_source: int = Field(..., description="ID de l'AAV de l'échec")
+    score_obtenu: float = Field(..., ge=0.0, le=1.0, description="Score de l'apprenant")
+    type_echec: Literal["calcul","comprehension","prerequis_manquant"] = Field(..., description="Détail de l'échec")
+    
+class GeneratePath(BaseModel):
+    """Méthode pour générer un parcours personnalisé."""
+    id_apprenant: int
+    id_aav_cible: int
+    profondeur_max: int = Field(default=3, ge=1, le=10, description="Profondeur max de l'analyse")
+    
+class RemediationResponse(BaseModel):
+    """Format standard pour la réponse d'une analyse"""
+    id_diagnostic: int
+    id_apprenant: int
+    id_aav_source: int
+    aav_defaillants: List[int]
+    recommandations: List[dict]
+    date_diagnostic: datetime
+    
+class PathRequest(BaseModel):
+    """Méthode pour demander l'analyse d'une séquence d'AVV"""
+    id_apprenant: int
+    chemin_aavs: List[int] = Field(..., description="AVVs à analyser")
+    
+class ErreurApprenant(BaseModel):
+    """Format standard pour la réponse d'une analyse sur le niveau de l'apprenant sur un AVV"""
+    id_aav: int
+    maitrise: float
+    reussi: bool
+    
+class DiagnosticRemediationRead(BaseModel):
+    id_diagnostic: int
+    id_apprenant: int
+    id_aav_source: int
+    aav_racines_defaillants: List[int]
+    score_obtenu: Optional[float] = None
+    date_diagnostic: datetime
+    profondeur_analyse: Optional[int] = None
+    recommandations: List[dict]
+
+    class Config:
+        from_attributes = True

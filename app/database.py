@@ -3,10 +3,10 @@ import sqlite3
 import json
 from contextlib import contextmanager
 from typing import Optional, List, Dict, Any
-from pathlib import Path
+from app.config import settings
 
 # Configuration
-DATABASE_PATH = Path("platonAAV.db")
+DATABASE_PATH = settings.database_path
 
 class DatabaseError(Exception):
     """Exception personnalisée pour les erreurs de base de données."""
@@ -177,6 +177,74 @@ def init_database():
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_tentative_aav ON tentative(id_aav_cible)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_tentative_date ON tentative(date_tentative)")
 
+
+
+# ============================================
+        # TABLES SPÉCIFIQUES: GROUPE 4
+        # ============================================
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS activite_pedagogique (
+                id_activite INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_aav INTEGER,
+                nom TEXT NOT NULL,
+                description TEXT,
+                type_activite TEXT,
+                ids_exercices_inclus TEXT,
+                discipline TEXT,
+                niveau_difficulte TEXT,
+                duree_estimee_minutes INTEGER,
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (id_aav) REFERENCES aav(id_aav) ON DELETE CASCADE
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS session_apprenant (
+                id_session INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_activite INTEGER NOT NULL,
+                id_apprenant INTEGER NOT NULL,
+                date_debut TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                date_fin TIMESTAMP,
+                statut TEXT CHECK(statut IN ('en_cours', 'terminee', 'abandonnee')),
+                progression_pourcentage REAL DEFAULT 0.0,
+                FOREIGN KEY (id_activite) REFERENCES activite_pedagogique (id_activite)
+            )
+        """)
+        
+        # ============================================
+        # TABLES SPÉCIFIQUES: GROUPE 6 (Remédiation)
+        # ============================================
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS diagnostic_remediation (
+                id_diagnostic INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_apprenant INTEGER NOT NULL,
+                id_aav_source INTEGER NOT NULL,
+                aav_racines_defaillants TEXT,  -- JSON array des IDs
+                score_obtenu REAL,
+                date_diagnostic TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                profondeur_analyse INTEGER,
+                recommandations TEXT,  -- JSON avec le parcours suggéré
+                FOREIGN KEY (id_apprenant) REFERENCES apprenant(id_apprenant) ON DELETE CASCADE,
+                FOREIGN KEY (id_aav_source) REFERENCES aav(id_aav) ON DELETE CASCADE
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS remediation_session (
+                id_session INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_diagnostic INTEGER NOT NULL,
+                id_apprenant INTEGER NOT NULL,
+                date_debut TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                date_fin TIMESTAMP,
+                aavs_cibles TEXT,  -- JSON array
+                progression TEXT,  -- État d'avancement
+                FOREIGN KEY (id_diagnostic) REFERENCES diagnostic_remediation(id_diagnostic) ON DELETE CASCADE,
+                FOREIGN KEY (id_apprenant) REFERENCES apprenant(id_apprenant) ON DELETE CASCADE
+            )
+        """)
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS navigation_cache (
                 id_apprenant INTEGER,
@@ -281,3 +349,28 @@ class BaseRepository:
                 (id_value,)
             )
             return cursor.rowcount > 0
+
+
+# ============================================
+# Repository Groupe 6
+# ============================================
+
+class RemediationRepository(BaseRepository):
+    def __init__(self):
+        super().__init__("diagnostic_remediation","id_diagnostic")
+        
+    def make(self,id_apprenant: int, id_aav_source: int, score: float, racines: List[int], recos: List[Dict], prof: int = 5) -> int:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"INSERT INTO diagnostic_remediation (id_apprenant, id_aav_source, aav_racines_defaillants, score_obtenu,recommandations, profondeur_analyse) VALUES (?, ?, ?, ?, ?, ?)",(id_apprenant, id_aav_source, to_json(racines), score, to_json(recos), prof)
+           )
+            return cursor.lastrowid
+        
+    def get_apprenant(self, id_apprenant: int) -> List[Dict]:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT * FROM diagnostic_remediation WHERE id_apprenant = ? ORDER BY date_diagnostic DESC", (id_apprenant,)
+            )
+            return [dict(row) for row in cursor.fetchall()]

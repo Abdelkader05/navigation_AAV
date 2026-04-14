@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from typing import List
 from datetime import datetime
-
+from app.config import settings
 from app.database import get_db_connection, from_json, to_json
 from app.models import AAV
 
@@ -48,7 +48,7 @@ def save_cache(cursor, id_apprenant, aav_id, categorie, raison=None):
         id_apprenant,
         aav_id,
         categorie,
-        datetime.now(),
+        datetime.now().isoformat(),
         to_json(raison) if raison else None
     ))
 
@@ -127,7 +127,7 @@ def get_accessible_aavs(id_apprenant: int):
 
                 prereq_statut = cursor.fetchone()
 
-                if not prereq_statut or prereq_statut["niveau_maitrise"] < 0.8:
+                if not prereq_statut or prereq_statut["niveau_maitrise"] < settings.review_threshold:
                     prerequis_ok = False
                     break
 
@@ -162,9 +162,9 @@ def get_in_progress_aavs(id_apprenant: int):
             ON a.id_aav = s.id_aav_cible
             WHERE s.id_apprenant = ?
             AND s.niveau_maitrise > 0
-            AND s.niveau_maitrise < 0.9
+            AND s.niveau_maitrise < ?
             AND a.is_active = 1
-        """, (id_apprenant,))
+        """, (id_apprenant, settings.mastery_threshold))
 
         rows = cursor.fetchall()
 
@@ -217,7 +217,7 @@ def get_blocked_aavs(id_apprenant: int):
 
                 statut = cursor.fetchone()
 
-                if not statut or statut["niveau_maitrise"] < 0.8:
+                if not statut or statut["niveau_maitrise"] < settings.review_threshold:
                     missing.append(prereq)
 
             if missing:
@@ -250,9 +250,9 @@ def get_reviewable_aavs(id_apprenant: int):
             JOIN statut_apprentissage s
             ON a.id_aav = s.id_aav_cible
             WHERE s.id_apprenant = ?
-            AND s.niveau_maitrise >= 0.8
+            AND s.niveau_maitrise >= ?
             AND a.is_active = 1
-        """, (id_apprenant,))
+        """, (id_apprenant, settings.review_threshold))
 
         rows = cursor.fetchall()
 

@@ -178,6 +178,8 @@ def update_aav_full(id_aav: int, aav: AAVCreate):
     repo.create(data)
 
     updated = repo.get_by_id(id_aav)
+    updated["prerequis_ids"] = from_json(updated["prerequis_ids"]) or []
+    updated["prerequis_externes_codes"] = from_json(updated.get("prerequis_externes_codes")) or []
     return AAV(**updated)
 
 @router.patch("/{id_aav}", response_model=AAV)
