@@ -7,14 +7,13 @@ from api_client import APIClient
 
 
 class AAVExplorerApp:
-    """Application Flet minimale pour explorer et créer des AAV."""
-
     def __init__(self, page: ft.Page) -> None:
         self.page = page
         self.api = APIClient()
         self.current_aavs: list[dict] = []
+        self.selected_aav: dict | None = None
 
-        self.page.title = "L'Architecte du Savoir - MVP Flet"
+        self.page.title = "L'Architecte du Savoir - Client lourd"
         self.page.window_width = 1200
         self.page.window_height = 700
         self.page.padding = 16
@@ -40,12 +39,13 @@ class AAVExplorerApp:
         self.load_button = ft.FilledButton("Appliquer", on_click=self.load_aavs)
         self.reset_button = ft.OutlinedButton("Réinitialiser", on_click=self.reset_filters)
         self.create_button = ft.FilledButton("Créer AAV", on_click=self.open_create_dialog)
-
-        self.aav_list = ft.ListView(
-            expand=True,
-            spacing=6,
-            auto_scroll=False,
+        self.edit_prereq_button = ft.OutlinedButton(
+            "Modifier prérequis",
+            on_click=self.open_edit_prereq_dialog,
+            disabled=True,
         )
+
+        self.aav_list = ft.ListView(expand=True, spacing=6, auto_scroll=False)
 
         self.detail_panel = ft.Container(
             content=ft.Text("Sélectionne un AAV dans la liste."),
@@ -61,7 +61,6 @@ class AAVExplorerApp:
         self.load_aavs()
 
     def build_layout(self) -> None:
-        """Construit l'interface principale."""
         filters = ft.Row(
             controls=[
                 self.discipline_field,
@@ -91,7 +90,13 @@ class AAVExplorerApp:
         right_column = ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text("Détail de l'AAV", size=20, weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        controls=[
+                            ft.Text("Détail de l'AAV", size=20, weight=ft.FontWeight.BOLD),
+                            self.edit_prereq_button,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
                     self.detail_panel,
                 ],
                 expand=True,
@@ -119,19 +124,22 @@ class AAVExplorerApp:
         )
 
     def set_status(self, message: str, error: bool = False) -> None:
-        """Affiche un message d'état."""
         self.status_text.value = message
         self.status_text.color = ft.Colors.RED if error else ft.Colors.GREEN
         self.page.update()
 
     def reset_filters(self, e: ft.ControlEvent) -> None:
-        """Réinitialise les filtres."""
         self.discipline_field.value = ""
         self.type_dropdown.value = ""
         self.load_aavs()
 
+    def get_next_aav_id(self) -> int:
+        if not self.current_aavs:
+            return 1
+        ids = [aav["id_aav"] for aav in self.current_aavs if "id_aav" in aav]
+        return max(ids) + 1 if ids else 1
+
     def load_aavs(self, e: ft.ControlEvent | None = None) -> None:
-        """Charge les AAV depuis l'API et remplit la liste."""
         try:
             self.set_status("", error=False)
 
@@ -158,6 +166,8 @@ class AAVExplorerApp:
                     self.aav_list.controls.append(ft.Card(content=tile))
 
             self.detail_panel.content = ft.Text("Sélectionne un AAV dans la liste.")
+            self.selected_aav = None
+            self.edit_prereq_button.disabled = True
             self.page.update()
 
         except requests.RequestException as exc:
@@ -166,9 +176,10 @@ class AAVExplorerApp:
             self.set_status(f"Erreur inattendue : {exc}", error=True)
 
     def show_details(self, id_aav: int) -> None:
-        """Charge le détail d'un AAV et l'affiche."""
         try:
             aav = self.api.get_aav(id_aav)
+            self.selected_aav = aav
+            self.edit_prereq_button.disabled = False
 
             details = ft.Column(
                 controls=[
@@ -201,17 +212,20 @@ class AAVExplorerApp:
         self.id_field = ft.TextField(
             label="ID *",
             value=str(self.get_next_aav_id()),
-            hint_text="ID numérique unique",
+            hint_text="ID unique",
             keyboard_type=ft.KeyboardType.NUMBER,
         )
-        self.nom_field = ft.TextField(label="Nom")
-        self.libelle_field = ft.TextField(label="Libellé intégration (Minimum 5 caractères)")
-        self.discipline_field_form = ft.TextField(label="Discipline")
-        self.enseignement_field = ft.TextField(label="Enseignement")
-        self.description_field = ft.TextField(label="Description (Minimum 10 caractères)", multiline=True)
+        self.nom_field = ft.TextField(label="Nom *")
+        self.libelle_field = ft.TextField(label="Libellé intégration * (min 5 caractères)")
+        self.discipline_field_form = ft.TextField(label="Discipline *")
+        self.enseignement_field = ft.TextField(label="Enseignement *")
+        self.description_field = ft.TextField(
+            label="Description * (min 10 caractères)",
+            multiline=True,
+        )
 
         self.type_dropdown_form = ft.Dropdown(
-            label="Type AAV",
+            label="Type AAV *",
             value="Atomique",
             options=[
                 ft.dropdown.Option("Atomique"),
@@ -222,7 +236,7 @@ class AAVExplorerApp:
         self.prerequis_field = ft.TextField(label="Pré-requis (ids séparés par ,)")
 
         self.type_eval_dropdown = ft.Dropdown(
-            label="Type évaluation",
+            label="Type évaluation *",
             value="Humaine",
             options=[
                 ft.dropdown.Option("Humaine"),
@@ -242,6 +256,7 @@ class AAVExplorerApp:
                 width=500,
                 content=ft.Column(
                     controls=[
+                        ft.Text("Composite : au moins un pré-requis.", size=12),
                         self.id_field,
                         self.nom_field,
                         self.libelle_field,
@@ -269,19 +284,10 @@ class AAVExplorerApp:
         self.dialog.open = True
         self.page.update()
 
-
-    def get_next_aav_id(self) -> int:
-        """Retourne le prochain ID disponible à partir des AAV déjà chargés."""
-        if not self.current_aavs:
-            return 1
-
-        ids = [aav["id_aav"] for aav in self.current_aavs if "id_aav" in aav]
-        return max(ids) + 1 if ids else 1
-
     def close_dialog(self):
         self.dialog.open = False
         self.page.update()
-            
+
     def create_aav_action(self, e):
         self.dialog_error.value = ""
 
@@ -296,8 +302,8 @@ class AAVExplorerApp:
                 self.page.update()
                 return
 
-            if not self.libelle_field.value:
-                self.dialog_error.value = "Libellé obligatoire"
+            if not self.libelle_field.value or len(self.libelle_field.value.strip()) < 5:
+                self.dialog_error.value = "Libellé obligatoire (min 5 caractères)"
                 self.page.update()
                 return
 
@@ -311,8 +317,8 @@ class AAVExplorerApp:
                 self.page.update()
                 return
 
-            if not self.description_field.value:
-                self.dialog_error.value = "Description obligatoire"
+            if not self.description_field.value or len(self.description_field.value.strip()) < 10:
+                self.dialog_error.value = "Description obligatoire (min 10 caractères)"
                 self.page.update()
                 return
 
@@ -346,7 +352,6 @@ class AAVExplorerApp:
             }
 
             created = self.api.create_aav(payload)
-
             self.close_dialog()
             self.load_aavs()
             self.set_status(f"AAV créé : {created['nom']}")
@@ -358,8 +363,93 @@ class AAVExplorerApp:
             self.dialog_error.value = str(exc)
             self.page.update()
 
+    def open_edit_prereq_dialog(self, e):
+        if not self.selected_aav:
+            self.set_status("Aucun AAV sélectionné.", error=True)
+            return
+
+        prerequis_actuels = self.selected_aav.get("prerequis_ids", [])
+        prerequis_txt = ",".join(str(x) for x in prerequis_actuels)
+
+        self.edit_prereq_error = ft.Text("", color=ft.Colors.RED)
+
+        self.edit_prereq_field = ft.TextField(
+            label="Pré-requis (IDs séparés par des virgules)",
+            value=prerequis_txt,
+            hint_text="Ex : 1,2,3",
+        )
+
+        self.edit_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(f"Modifier les pré-requis de l'AAV {self.selected_aav['id_aav']}"),
+            content=ft.Container(
+                width=500,
+                content=ft.Column(
+                    controls=[
+                        ft.Text(f"Nom : {self.selected_aav['nom']}"),
+                        self.edit_prereq_field,
+                        self.edit_prereq_error,
+                    ],
+                    tight=True,
+                ),
+            ),
+            actions=[
+                ft.TextButton("Annuler", on_click=lambda e: self.close_edit_dialog()),
+                ft.FilledButton("Enregistrer", on_click=self.save_prerequis_action),
+            ],
+        )
+
+        if self.edit_dialog not in self.page.overlay:
+            self.page.overlay.append(self.edit_dialog)
+
+        self.edit_dialog.open = True
+        self.page.update()
+
+    def save_prerequis_action(self, e):
+        if not self.selected_aav:
+            return
+
+        self.edit_prereq_error.value = ""
+
+        try:
+            raw_value = self.edit_prereq_field.value.strip()
+
+            prerequis_ids = []
+            if raw_value:
+                prerequis_ids = [
+                    int(x.strip())
+                    for x in raw_value.split(",")
+                    if x.strip()
+                ]
+
+            if self.selected_aav.get("type_aav") == "Composite (Chapitre)" and not prerequis_ids:
+                self.edit_prereq_error.value = "Un AAV Composite doit avoir au moins un pré-requis."
+                self.page.update()
+                return
+
+            updated = self.api.update_aav_prerequis(
+                self.selected_aav["id_aav"],
+                prerequis_ids,
+            )
+
+            self.selected_aav = updated
+            self.close_edit_dialog()
+            self.show_details(updated["id_aav"])
+            self.set_status("Pré-requis mis à jour avec succès.")
+
+        except ValueError:
+            self.edit_prereq_error.value = "Les pré-requis doivent être des entiers."
+            self.page.update()
+        except Exception as exc:
+            self.edit_prereq_error.value = str(exc)
+            self.page.update()
+
+    def close_edit_dialog(self):
+        self.edit_dialog.open = False
+        self.page.update()
+
+
 def main(page: ft.Page) -> None:
-    """Point d'entrée Flet."""
     AAVExplorerApp(page)
 
 

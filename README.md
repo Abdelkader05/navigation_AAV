@@ -78,6 +78,6 @@ pytest tests/test_profond.py -v
 Installation et lancement
 
 Depuis client_flet/ :
-
+cd client_lourd
 pip install -r requirements.txt
 flet run main.py
