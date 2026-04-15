@@ -59,7 +59,8 @@ La documentation interactive est disponible sur `http://localhost:8000/docs`.
 
 ##### Initialisation de la base de données
 
-test/test_init_db.py
+python -m tests.load_sql_dump
+
 
 
 
