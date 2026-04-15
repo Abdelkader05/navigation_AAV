@@ -1,84 +1,139 @@
-# PlatonAAV — Groupe 5 · Opérateurs de Navigation
+# Projet Python Option - Groupe 5
 
-API REST FastAPI pour les opérateurs de navigation du projet PlatonAAV. Ce module gère la progression des apprenants à travers les AAV (Aptitudes et Acquis Visés) : accessibilité, suivi en cours, blocages, et révisions espacées.
+## Presentation
 
----
+Ce projet tourne autour des AAV (Acquis d'Apprentissage Vises).
+On a une API FastAPI pour gerer les donnees et un client lourd Flet pour afficher tout ca plus facilement.
 
-## Structure du projet
+Le projet final est un melange de plusieurs morceaux du travail de groupe.
+On n'a donc pas tout recode de zero : quand une partie existait deja et collait au sujet, on l'a reprise puis adaptee a notre appli.
 
+## Ce qu'on peut faire
+
+- afficher la liste des AAV
+- filtrer les AAV
+- voir le detail d'un AAV
+- voir ses prerequis
+- voir les exercices lies a un AAV
+- creer un AAV
+- modifier les prerequis d'un AAV
+- charger un apprenant
+- afficher son suivi
+- simuler une tentative
+- recalculer son niveau de maitrise
+
+## Organisation rapide
+
+```text
+python_option/
+├── app/
+│   ├── main.py
+│   ├── database.py
+│   ├── models.py
+│   ├── maitrise.py
+│   └── routers/
+│       ├── aavs.py
+│       ├── learners.py
+│       ├── attempts.py
+│       ├── navigation.py
+│       └── remediation.py
+├── client_lourd/
+│   ├── api_client.py
+│   └── main.py
+├── tests/
+├── docs/
+├── requirements.txt
+└── groupe5.db
 ```
-app/
-├── main.py          # Application FastAPI, lifespan, gestion globale des erreurs
-├── database.py      # Connexion SQLite3, initialisation des tables
-├── models.py        # Modèles Pydantic (AAV, réponses navigation)
-├── config.py        # Configuration chargée depuis l'environnement
-└── routers/
-    └── navigation.py  # Endpoints de navigation
 
-tests/
-└── test_navigation.py  # Tests API avec base SQLite temporaire
-```
+## Role des fichiers principaux
 
-## Endpoints principaux
+- `app/main.py` : point d'entree de l'API
+- `app/database.py` : gestion SQLite
+- `app/models.py` : modeles Pydantic
+- `app/routers/aavs.py` : routes CRUD des AAV
+- `app/routers/learners.py` : routes des apprenants
+- `app/routers/attempts.py` : routes des tentatives
+- `client_lourd/api_client.py` : envoi des requetes a l'API
+- `client_lourd/main.py` : interface graphique Flet
 
-- `GET /navigation/{id_apprenant}/accessible`
-- `GET /navigation/{id_apprenant}/in-progress`
-- `GET /navigation/{id_apprenant}/blocked`
-- `GET /navigation/{id_apprenant}/reviewable`
-- `GET /navigation/{id_apprenant}/dashboard`
-- `GET /navigation/{id_apprenant}`
+## Ce qu'on a repris / adapte
 
+Pour respecter l'idee du projet, on a reutilise des morceaux deja faits par d'autres groupes quand c'etait pertinent.
 
-### Logique de navigation
+En particulier :
 
-- **Accessible** : prérequis tous ≥ 0.8 de maîtrise, AAV non encore commencé
-- **In progress** : maîtrise > 0 et < 0.9
-- **Blocked** : au moins un prérequis < 0.8
-- **Reviewable** : maîtrise ≥ 0.8 et révision jamais effectuée ou échéance dépassée
+- la logique des tentatives / traitement vient d'un autre groupe puis a ete branchee chez nous
+- le suivi apprenant a ete adapte pour s'afficher dans notre client lourd
+- on a relie les routes backend et le client pour que tout fonctionne ensemble
 
-Les résultats sont mis en cache dans `navigation_cache` pour éviter les recalculs.
+Donc notre travail a surtout ete un travail d'integration et d'adaptation, pas juste de recreation complete.
 
-python3 -m venv venv
-source venv/bin/activate
-#### Installation et lancement
+## Installation
 
 ```bash
 pip install -r requirements.txt
 ```
 
-```bash
-# Développement (rechargement automatique)
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Production
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
-```
-
-La documentation interactive est disponible sur `http://localhost:8000/docs`.
-
----
-
-##### Initialisation de la base de données
-
-python -m tests.load_sql_dump
-
-
-
+## Lancer l'API
 
 ```bash
-# Tous les tests
-pytest
-
-# Avec rapport de couverture
-pytest --cov=app --cov-report=html
-
-# Tests d'un fichier spécifique
-pytest tests/test_profond.py -v
+uvicorn app.main:app --reload
 ```
 
-Installation et lancement
+Ensuite on peut aller sur :
 
-Depuis client_flet/ :
+- `http://127.0.0.1:8000`
+- `http://127.0.0.1:8000/docs`
+
+## Lancer le client lourd
+
+Dans un autre terminal :
+
+```bash
 cd client_lourd
-pip install -r requirements.txt
 flet run main.py
+```
+
+## Routes utiles
+
+### AAV
+
+- `GET /aavs/`
+- `GET /aavs/{id}`
+- `POST /aavs/`
+- `PATCH /aavs/{id}`
+- `DELETE /aavs/{id}`
+
+### Apprenants
+
+- `GET /learners/`
+- `GET /learners/{id}/learning-status`
+- `GET /learners/{id}/learning-status/summary`
+
+### Tentatives
+
+- `POST /attempts`
+- `POST /attempts/{id}/process`
+
+## Exemple d'utilisation
+
+1. On lance l'API.
+2. On lance le client lourd.
+3. On choisit un apprenant.
+4. On regarde les AAV suivis.
+5. On simule une tentative sur un AAV.
+6. On recharge pour voir si le niveau change.
+
+## Tests
+
+Il y a quelques tests dans le dossier `tests`.
+
+```bash
+pytest
+```
+
+## Remarque finale
+
+Ce README est volontairement simple.
+L'idee c'est d'expliquer clairement ce que fait le projet, comment on le lance, et ce qu'on a vraiment fait dessus sans faire une doc trop professionnelle.

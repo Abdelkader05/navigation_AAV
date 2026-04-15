@@ -2,9 +2,11 @@ from typing import List
 
 
 def calculer_maitrise(scores: List[float], seuil_succes: float, nombre_succes_consecutifs: int) -> float:
+    # repris du groupe 3
     if not scores:
         return 0.0
 
+    # on regarde les derniers scores
     derniers_scores = scores[-nombre_succes_consecutifs:]
     succes_derniers_scores = [score for score in derniers_scores if score >= seuil_succes]
 
@@ -24,6 +26,7 @@ def message(
     est_maitrise: bool,
     nombre_succes_consecutifs: int,
 ) -> str:
+    # message simple
     if est_maitrise:
         return (
             f"Felicitation ! Vous avez atteint la maitrise de cet AAV avec "

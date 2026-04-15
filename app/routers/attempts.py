@@ -13,6 +13,7 @@ router = APIRouter(tags=["Tentatives"])
 
 
 def row_to_tentative(row: sqlite3.Row) -> Tentative:
+    # conversion sqlite -> modèle
     data = dict(row)
     data["est_valide"] = (data.get("est_valide", 0) == 1)
     meta = data.get("metadata")
@@ -28,6 +29,7 @@ def list_attempts(
     limit: int = 100,
     offset: int = 0,
 ):
+    # liste simple des tentatives
     query = "SELECT * FROM tentative"
     where = []
     params = []
@@ -60,6 +62,7 @@ def list_attempts(
 
 @router.get("/attempts/{id}", response_model=Tentative)
 def get_attempt(id: int):
+    # une tentative
     with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("SELECT * FROM tentative WHERE id = ?", (id,))
@@ -73,6 +76,7 @@ def get_attempt(id: int):
 
 @router.post("/attempts", response_model=Tentative, status_code=201)
 def create_attempt(payload: TentativeCreate):
+    # étape 1
     with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -110,6 +114,7 @@ def create_attempt(payload: TentativeCreate):
 
 @router.delete("/attempts/{id}", status_code=204)
 def delete_attempt(id: int):
+    # si on veut supprimer
     with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute("DELETE FROM tentative WHERE id = ?", (id,))
@@ -120,6 +125,7 @@ def delete_attempt(id: int):
 
 @router.post("/attempts/{id}/process", response_model=Process)
 def process_attempt(id: int):
+    # étape 2
     SEUIL_SUCCES = 0.9
     N_SUCCES_CONSEC = 5
 
@@ -134,6 +140,7 @@ def process_attempt(id: int):
         id_apprenant = attempt["id_apprenant"]
         id_aav_cible = attempt["id_aav_cible"]
 
+        # on regarde si le statut existe déjà
         cur.execute(
             "SELECT * FROM statut_apprentissage WHERE id_apprenant = ? AND id_aav_cible = ?",
             (id_apprenant, id_aav_cible),
@@ -156,11 +163,13 @@ def process_attempt(id: int):
 
         ancien_niveau = float(statut["niveau_maitrise"] or 0.0)
 
+        # on garde l'id de la tentative dans l'historique
         hist_raw = statut["historique_tentatives_ids"]
         hist = from_json(hist_raw) if hist_raw else []
         if id not in hist:
             hist.append(id)
 
+        # on reprend tous les scores pour recalculer
         cur.execute(
             """
             SELECT score_obtenu
@@ -176,6 +185,7 @@ def process_attempt(id: int):
         est_maitrise = nouveau_niveau >= 1.0
         msg = message(ancien_niveau, nouveau_niveau, est_maitrise, N_SUCCES_CONSEC)
 
+        # update du statut
         cur.execute(
             """
             UPDATE statut_apprentissage

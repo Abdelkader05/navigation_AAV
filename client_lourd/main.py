@@ -279,6 +279,9 @@ class AAVExplorerApp:
             aav = self.api.get_aav(id_aav)
             self.selected_aav = aav
             self.edit_prereq_button.disabled = False
+            # juste pour voir direct les exos de l'AAV dans la case de droite
+            exercices = aav.get("ids_exercices", [])
+            exercices_txt = ", ".join(str(x) for x in exercices) if exercices else "Aucun exercice"
 
             details = ft.Column(
                 controls=[
@@ -289,6 +292,7 @@ class AAVExplorerApp:
                     ft.Text(f"Type : {aav['type_aav']}", selectable=True),
                     ft.Text(f"Évaluation : {aav['type_evaluation']}", selectable=True),
                     ft.Text(f"Pré-requis : {aav.get('prerequis_ids', [])}", selectable=True),
+                    ft.Text(f"Exercices : {exercices_txt}", selectable=True),
                     ft.Divider(),
                     ft.Text("Description", weight=ft.FontWeight.BOLD),
                     ft.Text(aav["description_markdown"], selectable=True),
@@ -561,11 +565,13 @@ class AAVExplorerApp:
 
     def load_learners(self) -> None:
         try:
+            # récup apprenants groupe 2
             learners = self.api.get_learners()
             self.current_learners = learners
 
             options = []
             for learner in learners:
+                # juste id + nom
                 learner_id = learner.get("id_apprenant")
                 username = learner.get("nom_utilisateur", f"Apprenant {learner_id}")
                 options.append(
@@ -588,6 +594,36 @@ class AAVExplorerApp:
                 error=True,
             )
 
+    def build_status_tree_lines(self, learning_status, aav_lookup):
+        # petit tree view en texte
+        lines = []
+        if not learning_status:
+            return [ft.Text("Aucun statut pour cet apprenant.")]
+
+        for i, status in enumerate(learning_status):
+            # on prend l'id et on retrouve le nom
+            aav_id = status.get("id_aav_cible")
+            aav_name = aav_lookup.get(aav_id, {}).get("nom", "AAV inconnu")
+            mastery = status.get("niveau_maitrise", 0)
+            last_session = status.get("date_derniere_session", "pas de session")
+            prefix = "└─" if i == len(learning_status) - 1 else "├─"
+
+            if mastery >= 0.9:
+                state = "maitrise"
+            elif mastery > 0:
+                state = "en cours"
+            else:
+                state = "non commence"
+
+            lines += [
+                ft.Text(f"{prefix} AAV {aav_id} - {aav_name}", weight=ft.FontWeight.BOLD),
+                ft.Text(f"   niveau : {mastery}"),
+                ft.Text(f"   etat : {state}"),
+                ft.Text(f"   derniere session : {last_session}"),
+            ]
+
+        return lines
+
     def load_learner_summary(self, e):
         if not self.learner_dropdown.value:
             self.set_status("Choisis un apprenant.", error=True)
@@ -595,17 +631,21 @@ class AAVExplorerApp:
 
         try:
             learner_id = int(self.learner_dropdown.value)
+            # résumé + détail
             summary = self.api.get_learner_summary(learner_id)
             learning_status = self.api.get_learning_status(learner_id)
             aav_lookup = {aav["id_aav"]: aav for aav in self.api.get_aavs()}
 
             status_rows = []
+            learning_status = []  # sinon Ã§a l'affiche 2 fois
+            learning_status = self.api.get_learning_status(learner_id)
             for status in learning_status:
+                # on relie le statut à l'AAV pour avoir le nom
                 aav_id = status.get("id_aav_cible")
                 aav = aav_lookup.get(aav_id, {})
                 aav_name = aav.get("nom", "AAV inconnu")
                 mastery = status.get("niveau_maitrise", 0)
-
+                # juste un petit texte simple
                 mastery_label = "maitrise" if mastery >= 0.9 else "en cours" if mastery > 0 else "non commence"
 
                 status_rows.append(
@@ -626,6 +666,7 @@ class AAVExplorerApp:
                 )
 
             if not status_rows:
+                # si rien pour cet apprenant
                 status_rows.append(ft.Text("Aucun statut d'apprentissage pour cet apprenant."))
 
             content = ft.Column(
@@ -678,6 +719,7 @@ class AAVExplorerApp:
                 "score_obtenu": score,
             }
 
+            # comme le groupe 3: create puis process
             created_attempt = self.api.create_attempt(payload)
             process_result = self.api.process_attempt(created_attempt["id"])
             self.set_status(process_result.get("message", "Tentative traitee avec succes."))

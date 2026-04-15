@@ -1,15 +1,14 @@
-
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional, List, Literal
 from enum import Enum
 from datetime import datetime
 
 # ============================================
-# ÉNUMÉRATIONS
+# ENUMERATIONS
 # ============================================
 
 class TypeEvaluationAAV(str, Enum):
-    """Types d'évaluation possibles pour un AAV."""
+    """Types d'evaluation possibles pour un AAV."""
     HUMAINE = "Humaine"
     CALCUL = "Calcul Automatisé"
     CHUTE = "Compréhension par Chute"
@@ -24,65 +23,66 @@ class TypeAAV(str, Enum):
     COMPOSITE = "Composite (Chapitre)"
 
 class NiveauDifficulte(str, Enum):
-    """Niveaux de difficulté pour les exercices."""
+    """Niveaux de difficulte pour les exercices."""
     DEBUTANT = "debutant"
     INTERMEDIAIRE = "intermediaire"
     AVANCE = "avance"
 
 # ============================================
-# MODÈLES DE BASE (Communs à tous les groupes)
+# MODELES DE BASE (Communs a tous les groupes)
 # ============================================
 
 class RegleProgression(BaseModel):
     """
-    Règles déterminant comment un apprenant progresse sur un AAV.
+    Regles determinant comment un apprenant progresse sur un AAV.
 
     Exemple:
-        - seuil_succes: 0.7 (70% pour réussir)
-        - nombre_succes_consecutifs: 3 (3 réussites d'affilée = maîtrise)
+        - seuil_succes: 0.7 (70% pour reussir)
+        - nombre_succes_consecutifs: 3 (3 reussites d'affilee = maitrise)
     """
     seuil_succes: float = Field(
         default=0.7,
         ge=0.0,
         le=1.0,
-        description="Score minimum pour considérer une tentative comme réussie"
+        description="Score minimum pour considerer une tentative comme reussie"
     )
     maitrise_requise: float = Field(
         default=1.0,
         ge=0.0,
         le=1.0,
-        description="Niveau de maîtrise à atteindre pour valider l'AAV"
+        description="Niveau de maitrise a atteindre pour valider l'AAV"
     )
     nombre_succes_consecutifs: int = Field(
         default=1,
         ge=1,
-        description="Nombre de réussites consécutives requises"
+        description="Nombre de reussites consecutives requises"
     )
     nombre_jugements_pairs_requis: int = Field(
         default=3,
         ge=1,
-        description="Pour évaluation par les pairs: jugements nécessaires"
+        description="Pour evaluation par les pairs: jugements necessaires"
     )
     tolerance_jugement: float = Field(
         default=0.2,
         ge=0.0,
         le=1.0,
-        description="Marge de tolérance pour les évaluations par pairs"
+        description="Marge de tolerance pour les evaluations par pairs"
     )
 
 class AAVBase(BaseModel):
-    """Champs de base pour un AAV (création et mise à jour)."""
+    """Champs de base pour un AAV (creation et mise a jour)."""
     nom: str = Field(..., min_length=3, max_length=200, description="Nom technique de l'AAV")
     libelle_integration: str = Field(
         ...,
         min_length=5,
         description="Forme grammaticale pour insertion dans une phrase"
     )
-    discipline: str = Field(..., min_length=2, description="Discipline (ex: Mathématiques)")
-    enseignement: str = Field(..., description="Enseignement spécifique (ex: Algèbre)")
+    discipline: str = Field(..., min_length=2, description="Discipline (ex: Mathematiques)")
+    enseignement: str = Field(..., description="Enseignement specifique (ex: Algebre)")
     type_aav: TypeAAV
-    description_markdown: str = Field(..., min_length=10, description="Description complète")
-    prerequis_ids: List[int] = Field(default_factory=list, description="IDs des AAV prérequis")
+    description_markdown: str = Field(..., min_length=10, description="Description complete")
+    prerequis_ids: List[int] = Field(default_factory=list, description="IDs des AAV prerequis")
+    ids_exercices: List[int] = Field(default_factory=list, description="IDs des exercices de l'AAV")
     prerequis_externes_codes: List[str] = Field(default_factory=list)
     code_prerequis_interdisciplinaire: Optional[str] = None
     type_evaluation: TypeEvaluationAAV
@@ -90,19 +90,19 @@ class AAVBase(BaseModel):
     @field_validator('libelle_integration')
     @classmethod
     def validate_libelle(cls, v: str) -> str:
-        """Vérifie que le libellé peut s'intégrer dans une phrase."""
+        """Verifie que le libelle peut s'integrer dans une phrase."""
         phrase_test = f"Nous allons travailler {v}"
         if len(phrase_test) > 250:
-            raise ValueError("Libellé trop long pour une phrase fluide")
+            raise ValueError("Libelle trop long pour une phrase fluide")
         return v
 
 class AAVCreate(AAVBase):
-    """Modèle pour la création d'un AAV (POST)."""
+    """Modele pour la creation d'un AAV (POST)."""
     id_aav: int = Field(..., gt=0, description="Identifiant unique de l'AAV")
     regles_progression: RegleProgression = Field(default_factory=RegleProgression)
 
 class AAVUpdate(BaseModel):
-    """Modèle pour la mise à jour partielle (PATCH). Tous les champs sont optionnels."""
+    """Modele pour la mise a jour partielle (PATCH). Tous les champs sont optionnels."""
     nom: Optional[str] = Field(None, min_length=3, max_length=200)
     libelle_integration: Optional[str] = None
     description_markdown: Optional[str] = None
@@ -110,7 +110,7 @@ class AAVUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 class AAV(AAVBase):
-    """Modèle complet d'un AAV (réponse API)."""
+    """Modele complet d'un AAV (reponse API)."""
     id_aav: int
     is_active: bool = True
     version: int = 1
@@ -119,21 +119,21 @@ class AAV(AAVBase):
 
     class Config:
         """Configuration Pydantic V2."""
-        from_attributes = True  # Permet de créer depuis un objet SQLAlchemy/dict
+        from_attributes = True
 
 # ============================================
-# MODÈLES POUR LES RÉPONSES API
+# MODELES POUR LES REPONSES API
 # ============================================
 
 class ErrorResponse(BaseModel):
-    """Format standard pour les réponses d'erreur."""
+    """Format standard pour les reponses d'erreur."""
     error: str = Field(..., description="Type d'erreur")
     message: str = Field(..., description="Message lisible par l'utilisateur")
-    details: Optional[dict] = Field(None, description="Détails techniques supplémentaires")
+    details: Optional[dict] = Field(None, description="Details techniques supplementaires")
     timestamp: datetime = Field(default_factory=datetime.now)
 
 class PaginatedResponse(BaseModel):
-    """Format standard pour les réponses paginées."""
+    """Format standard pour les reponses paginees."""
     items: List[dict]
     total: int
     page: int
@@ -143,7 +143,7 @@ class PaginatedResponse(BaseModel):
     has_previous: bool
 
 class SuccessResponse(BaseModel):
-    """Format standard pour les confirmations de succès."""
+    """Format standard pour les confirmations de succes."""
     success: bool = True
     message: str
     id: Optional[int] = None
@@ -151,24 +151,24 @@ class SuccessResponse(BaseModel):
 
 
 # ============================================
-# MODÈLES GROUPE 6: REMÉDIATION // POST du cahier de charges
+# MODELES GROUPE 6: REMEDIATION // POST du cahier de charges
 # ============================================
 
 class TriggerRemediation(BaseModel):
-    """Méthode pour déclencher une analyse de remédiation."""
+    """Methode pour declencher une analyse de remediation."""
     id_apprenant: int = Field(..., description="ID de l'apprenant")
-    id_aav_source: int = Field(..., description="ID de l'AAV de l'échec")
+    id_aav_source: int = Field(..., description="ID de l'AAV de l'echec")
     score_obtenu: float = Field(..., ge=0.0, le=1.0, description="Score de l'apprenant")
-    type_echec: Literal["calcul","comprehension","prerequis_manquant"] = Field(..., description="Détail de l'échec")
+    type_echec: Literal["calcul","comprehension","prerequis_manquant"] = Field(..., description="Detail de l'echec")
     
 class GeneratePath(BaseModel):
-    """Méthode pour générer un parcours personnalisé."""
+    """Methode pour generer un parcours personnalise."""
     id_apprenant: int
     id_aav_cible: int
     profondeur_max: int = Field(default=3, ge=1, le=10, description="Profondeur max de l'analyse")
     
 class RemediationResponse(BaseModel):
-    """Format standard pour la réponse d'une analyse"""
+    """Format standard pour la reponse d'une analyse"""
     id_diagnostic: int
     id_apprenant: int
     id_aav_source: int
@@ -177,12 +177,12 @@ class RemediationResponse(BaseModel):
     date_diagnostic: datetime
     
 class PathRequest(BaseModel):
-    """Méthode pour demander l'analyse d'une séquence d'AVV"""
+    """Methode pour demander l'analyse d'une sequence d'AVV"""
     id_apprenant: int
-    chemin_aavs: List[int] = Field(..., description="AVVs à analyser")
+    chemin_aavs: List[int] = Field(..., description="AVVs a analyser")
     
 class ErreurApprenant(BaseModel):
-    """Format standard pour la réponse d'une analyse sur le niveau de l'apprenant sur un AVV"""
+    """Format standard pour la reponse d'une analyse sur le niveau de l'apprenant sur un AVV"""
     id_aav: int
     maitrise: float
     reussi: bool
@@ -201,33 +201,25 @@ class DiagnosticRemediationRead(BaseModel):
         from_attributes = True
 
 
-
-
-class LearnerBase(BaseModel):  # ?voir quoi retirer
+class LearnerBase(BaseModel):
     id_apprenant: int = Field(..., gt=0)
-    nom_utilisateur: str = Field(..., min_length=1,
-                                 description="Nom de l'apprenti")
+    nom_utilisateur: str = Field(..., min_length=1, description="Nom de l'apprenti")
     email: str = Field(description="E-mail de l'apprenti")
-    # Car on veux pouvoir accepter None
     ontologie_reference_id: Optional[int] = None
     statuts_actifs_ids: List[int] = Field(default_factory=list)
     codes_prerequis_externes_valides: List[str] = Field(default_factory=list)
     date_inscription: Optional[datetime] = None
     derniere_connexion: Optional[datetime] = None
-    is_active: bool = True  # on met a True direct et on changera au cas ou
+    is_active: bool = True
 
     @field_validator('email')
     @classmethod
     def test_email_valide(cls, value: str) -> str:
-        if '@' not in value or '.' not in value.split(
-                '@')[-1]:  # comme ça on autorise les .fr .org etc
-            raise ValueError(
-                "Invalid email format (supposed to be exemple@xyz.com)")
+        if '@' not in value or '.' not in value.split('@')[-1]:
+            raise ValueError("Invalid email format (supposed to be exemple@xyz.com)")
         return value.lower()
 
-    @field_validator('statuts_actifs_ids',
-                     'codes_prerequis_externes_valides',
-                     mode='before')
+    @field_validator('statuts_actifs_ids', 'codes_prerequis_externes_valides', mode='before')
     @classmethod
     def parse_json_list(cls, v):
         """Convertit automatiquement les strings JSON en listes."""
@@ -240,17 +232,17 @@ class LearnerBase(BaseModel):  # ?voir quoi retirer
         return v or []
 
 
-class LearnerCreate(LearnerBase):  # ? rajouter les choses retirées
+class LearnerCreate(LearnerBase):
     pass
 
 
-class LearnerUpdate(BaseModel):  # Maintenant on est convaincu
+class LearnerUpdate(BaseModel):
     ontologie_reference_id: Optional[int] = None
     statuts_actifs_ids: Optional[List[int]] = None
     codes_prerequis_externes_valides: Optional[List[str]] = None
 
 
-class Learner(LearnerBase):  # ? a rajouter
+class Learner(LearnerBase):
     model_config = ConfigDict(from_attributes=True)
 
 

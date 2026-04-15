@@ -26,12 +26,13 @@ class AAVRepository(BaseRepository):
 
             # Conversion des listes en JSON
             prerequis_json = to_json(data.get('prerequis_ids', []))
+            exercices_json = to_json(data.get('ids_exercices', []))
 
             cursor.execute("""
                 INSERT INTO aav (
                     id_aav, nom, libelle_integration, discipline, enseignement,
-                    type_aav, description_markdown, prerequis_ids, type_evaluation
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    type_aav, description_markdown, prerequis_ids, ids_exercices, type_evaluation
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data['id_aav'],
                 data['nom'],
@@ -41,6 +42,7 @@ class AAVRepository(BaseRepository):
                 data['type_aav'],
                 data['description_markdown'],
                 prerequis_json,
+                exercices_json,
                 data['type_evaluation']
             ))
 
@@ -116,6 +118,7 @@ def list_aavs(
             data = dict(row)
 
             data["prerequis_ids"] = from_json(data["prerequis_ids"]) or []
+            data["ids_exercices"] = from_json(data.get("ids_exercices")) or []
             data["prerequis_externes_codes"] = from_json(data.get("prerequis_externes_codes")) or []
 
             result.append(AAV(**data))
@@ -132,6 +135,7 @@ def get_aav(id_aav: int):
         raise HTTPException(status_code=404, detail="AAV non trouvé")
     
     data["prerequis_ids"] = from_json(data["prerequis_ids"]) or []
+    data["ids_exercices"] = from_json(data.get("ids_exercices")) or []
     data["prerequis_externes_codes"] = from_json(data.get("prerequis_externes_codes")) or []
 
     return AAV(**data)
@@ -154,6 +158,7 @@ def create_aav(aav: AAVCreate):
         created = repo.get_by_id(aav.id_aav)
 
         created["prerequis_ids"] = from_json(created["prerequis_ids"]) or []
+        created["ids_exercices"] = from_json(created.get("ids_exercices")) or []
         created["prerequis_externes_codes"] = from_json(created.get("prerequis_externes_codes")) or []
 
         return AAV(**created)
@@ -179,6 +184,7 @@ def update_aav_full(id_aav: int, aav: AAVCreate):
 
     updated = repo.get_by_id(id_aav)
     updated["prerequis_ids"] = from_json(updated["prerequis_ids"]) or []
+    updated["ids_exercices"] = from_json(updated.get("ids_exercices")) or []
     updated["prerequis_externes_codes"] = from_json(updated.get("prerequis_externes_codes")) or []
     return AAV(**updated)
 
@@ -199,7 +205,8 @@ def update_aav_partial(id_aav: int, aav: AAVUpdate):
 
     updated = repo.get_by_id(id_aav)
 
-    updated["prerequis_ids"] = from_json(updated["prerequis_ids"])
+    updated["prerequis_ids"] = from_json(updated["prerequis_ids"]) or []
+    updated["ids_exercices"] = from_json(updated.get("ids_exercices")) or []
     updated["prerequis_externes_codes"] = from_json(updated.get("prerequis_externes_codes")) or []
 
     return AAV(**updated)
