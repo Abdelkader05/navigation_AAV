@@ -1,0 +1,228 @@
+JEU DE TEST - SOUTENANCE
+Projet Python Option - Groupe 5
+
+But du fichier
+----------------
+Ce fichier sert de guide pendant la soutenance.
+L'idee est de montrer clairement le fonctionnement de notre application avec un enchainement simple, logique et rapide.
+
+
+1. Ce qu'il faut lancer avant de passer
+---------------------------------------
+1) Ouvrir un terminal dans le projet
+2) Lancer l'API :
+
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+3) Verifier vite fait que l'API tourne
+   - soit avec l'URL http://127.0.0.1:8000/docs
+   - soit avec la route /health
+
+4) Ouvrir un autre terminal
+5) Aller dans le dossier client lourd :
+
+cd client_lourd
+
+6) Lancer le client :
+
+flet run main.py
+
+
+2. Ce qu'on peut dire au debut
+------------------------------
+Notre application est composee d'une API FastAPI et d'un client lourd Flet.
+
+Le but est de gerer des AAV, d'afficher leur detail et de suivre la progression d'un apprenant.
+
+On a aussi ajoute une partie phase 3 pour simuler une tentative et voir l'effet sur le suivi apprenant.
+
+
+3. Test 1 - Verifier que l'API fonctionne
+-----------------------------------------
+Action a faire :
+- montrer que le serveur tourne dans le terminal
+- montrer eventuellement /docs
+
+Ce qu'on doit voir :
+- l'API se lance sans erreur
+- les routes sont visibles dans Swagger
+
+4. Test 2 - Affichage de la liste des AAV
+-----------------------------------------
+Action a faire :
+- ouvrir le client lourd
+- regarder la partie gauche Liste des AAV
+- cliquer sur Appliquer si besoin
+
+Ce qu'on doit voir :
+- les AAV se chargent dans la liste
+- on voit leur id, leur nom, leur discipline et leur type
+
+
+5. Test 3 - Filtrage des AAV
+----------------------------
+Action a faire :
+- ecrire une discipline dans le champ Discipline
+- ou choisir un type dans le menu deroulant
+- cliquer sur Appliquer
+
+Ce qu'on doit voir :
+- la liste se met a jour avec les filtres
+
+
+6. Test 4 - Detail d'un AAV
+---------------------------
+Action a faire :
+- cliquer sur un AAV dans la liste
+
+Ce qu'on doit voir a droite :
+- ID
+- nom
+- discipline
+- enseignement
+- type
+- type d'evaluation
+- prerequis
+- exercices lies a l'AAV
+- description
+
+Quand on clique sur un AAV, on affiche son detail dans le panneau de droite.
+
+On a detaille l'affichage pour avoir une vue plus complete, notamment avec les exercices lies a l'AAV.
+
+
+7. Test 5 - Modification des prerequis
+--------------------------------------
+Action a faire :
+- selectionner un AAV
+- cliquer sur Modifier prerequis
+- changer la liste des ids
+- enregistrer
+
+Ce qu'on doit voir :
+- pas d'erreur
+- les prerequis sont mis a jour
+- le detail a droite change apres l'enregistrement
+
+Ce qu'on peut dire :
+On peut modifier les prerequis directement depuis l'interface, ce qui passe par une mise a jour cote API.
+
+
+8. Test 6 - Chargement d'un apprenant
+-------------------------------------
+Action a faire :
+- aller dans la partie Phase 3 - Suivi apprenant
+- choisir un apprenant
+- cliquer sur Charger apprenant
+
+Ce qu'on doit voir :
+- un resume du suivi apparait
+- total des AAV suivis
+- AAV maitrises
+- AAV en cours
+- AAV non commences
+- taux global
+- detail des AAV suivis
+
+Ce qu'on peut dire :
+Cette partie affiche le suivi d'un apprenant a partir des donnees du backend.
+
+
+9. Test 7 - Lire le detail du suivi apprenant
+---------------------------------------------
+Action a faire :
+- regarder les cartes/infos des AAV suivis
+
+Ce qu'on doit voir :
+- l'id de l'AAV
+- le nom de l'AAV
+- le niveau de maitrise
+- l'etat : maitrise / en cours / non commence
+
+Ce qu'on peut dire :
+Le but ici est de voir rapidement ou en est l'apprenant sur chaque AAV.
+
+
+10. Test 8 - Simulation d'une tentative
+---------------------------------------
+Action a faire :
+- garder un apprenant selectionne
+- entrer un ID d'AAV cible
+- laisser ou changer l'ID exercice
+- entrer un score entre 0 et 1
+- cliquer sur Simuler Tentative
+
+Exemple :
+- ID AAV cible : 1
+- ID exercice : 1001
+- score : 0.8
+
+Ce qu'on doit voir :
+- la tentative est creee puis traitee
+- un message de succes s'affiche
+- le suivi apprenant se recharge
+- le niveau de maitrise peut changer
+
+Ce qu'on peut dire :
+Ici on simule une tentative sur un AAV pour mettre a jour la progression de l'apprenant.
+
+On cree la tentative puis on la traite pour recalculer le niveau de maitrise.
+
+
+11. Test 9 - Montrer que la progression change
+----------------------------------------------
+Action a faire :
+- comparer le suivi avant et apres la simulation
+
+Ce qu'on doit voir :
+- une evolution du niveau de maitrise
+- eventuellement un changement d'etat
+
+Ce qu'on peut dire :
+Ca montre que l'application ne fait pas juste un affichage statique : il y a bien une mise a jour des donnees apres une action utilisateur.
+
+
+12. Si le prof demande ce qu'on a fait
+--------------------------------------
+Reponse possible :
+
+On a travaille sur l'integration de l'application, l'affichage des AAV, le detail, le suivi apprenant et la simulation de tentative.
+
+Le but pour nous etait surtout d'avoir une application cohérente, utilisable et presentable en client lourd.
+
+On a relie la base, l'API et l'interface pour que les differentes parties fonctionnent ensemble.
+
+
+13. Si quelque chose bug pendant la demo
+----------------------------------------
+Choses a verifier vite :
+- l'API tourne bien
+- le client est bien lance
+- l'URL du backend est bonne
+- la base de donnees est presente
+- l'AAV choisi existe bien
+- le score est entre 0 et 1
+
+Phrase possible :
+On verifie juste le lancement des services, mais normalement le parcours principal fonctionne.
+
+
+14. Ordre conseille pour une soutenance de 10 minutes
+-----------------------------------------------------
+1) dire en 20 secondes ce que fait le projet
+2) montrer l'API qui tourne
+3) montrer la liste des AAV
+4) cliquer sur un AAV et montrer le detail
+5) montrer la modification de prerequis
+6) charger un apprenant
+7) montrer le suivi
+8) simuler une tentative
+9) montrer que la progression change
+10) conclure
+
+
+15. Conclusion simple
+---------------------
+Phrase possible :
+
+Le projet permet de gerer les AAV, de consulter leur detail et de suivre un apprenant avec mise a jour apres tentative. On a voulu faire une application claire, simple a utiliser et suffisamment complete pour montrer un vrai fonctionnement pendant la demo.

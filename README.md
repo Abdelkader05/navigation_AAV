@@ -132,8 +132,3 @@ Il y a quelques tests dans le dossier `tests`.
 ```bash
 pytest
 ```
-
-## Remarque finale
-
-Ce README est volontairement simple.
-L'idee c'est d'expliquer clairement ce que fait le projet, comment on le lance, et ce qu'on a vraiment fait dessus sans faire une doc trop professionnelle.
