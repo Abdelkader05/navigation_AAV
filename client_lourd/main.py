@@ -1,185 +1,367 @@
-"""
-Client lourd minimal pour explorer les AAV.
-Phase 1 :
-- afficher la liste des AAV
-- afficher les détails d'un AAV sélectionné
-- filtrer par discipline et type
-"""
+from __future__ import annotations
 
-import tkinter as tk
-from tkinter import ttk, messagebox
+import flet as ft
+import requests
 
 from api_client import APIClient
 
 
-class AAVApp(tk.Tk):
-    """Fenêtre principale de l'application."""
+class AAVExplorerApp:
+    """Application Flet minimale pour explorer et créer des AAV."""
 
-    def __init__(self):
-        super().__init__()
-
-        self.title("L'Architecte du Savoir - Client lourd")
-        self.geometry("1000x600")
-
-        # Client API
+    def __init__(self, page: ft.Page) -> None:
+        self.page = page
         self.api = APIClient()
+        self.current_aavs: list[dict] = []
 
-        # Données actuellement affichées
-        self.current_aavs = []
+        self.page.title = "L'Architecte du Savoir - MVP Flet"
+        self.page.window_width = 1200
+        self.page.window_height = 700
+        self.page.padding = 16
+        self.page.scroll = ft.ScrollMode.AUTO
 
-        # Variables des filtres
-        self.discipline_var = tk.StringVar()
-        self.type_var = tk.StringVar()
+        self.discipline_field = ft.TextField(
+            label="Discipline",
+            hint_text="Ex: Mathématiques",
+            expand=1,
+        )
 
-        self._build_ui()
+        self.type_dropdown = ft.Dropdown(
+            label="Type",
+            width=220,
+            options=[
+                ft.dropdown.Option(""),
+                ft.dropdown.Option("Atomique"),
+                ft.dropdown.Option("Composite (Chapitre)"),
+            ],
+            value="",
+        )
+
+        self.load_button = ft.FilledButton("Appliquer", on_click=self.load_aavs)
+        self.reset_button = ft.OutlinedButton("Réinitialiser", on_click=self.reset_filters)
+        self.create_button = ft.FilledButton("Créer AAV", on_click=self.open_create_dialog)
+
+        self.aav_list = ft.ListView(
+            expand=True,
+            spacing=6,
+            auto_scroll=False,
+        )
+
+        self.detail_panel = ft.Container(
+            content=ft.Text("Sélectionne un AAV dans la liste."),
+            padding=16,
+            expand=True,
+            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border_radius=12,
+        )
+
+        self.status_text = ft.Text("", color=ft.Colors.RED)
+
+        self.build_layout()
         self.load_aavs()
 
-    def _build_ui(self):
-        """Construit l'interface graphique principale."""
-
-        # Frame principale
-        main_frame = ttk.Frame(self, padding=10)
-        main_frame.pack(fill="both", expand=True)
-
-        # -------------------------------
-        # Zone filtres
-        # -------------------------------
-        filters_frame = ttk.LabelFrame(main_frame, text="Filtres", padding=10)
-        filters_frame.pack(fill="x", pady=(0, 10))
-
-        ttk.Label(filters_frame, text="Discipline :").grid(row=0, column=0, padx=5, pady=5)
-        discipline_entry = ttk.Entry(filters_frame, textvariable=self.discipline_var, width=25)
-        discipline_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        ttk.Label(filters_frame, text="Type :").grid(row=0, column=2, padx=5, pady=5)
-        type_combo = ttk.Combobox(
-            filters_frame,
-            textvariable=self.type_var,
-            values=["", "Atomique", "Composite (Chapitre)"],
-            state="readonly",
-            width=22
-        )
-        type_combo.grid(row=0, column=3, padx=5, pady=5)
-        type_combo.current(0)
-
-        ttk.Button(filters_frame, text="Appliquer", command=self.load_aavs).grid(row=0, column=4, padx=5, pady=5)
-        ttk.Button(filters_frame, text="Réinitialiser", command=self.reset_filters).grid(row=0, column=5, padx=5, pady=5)
-
-        # -------------------------------
-        # Zone contenu
-        # -------------------------------
-        content_frame = ttk.Frame(main_frame)
-        content_frame.pack(fill="both", expand=True)
-
-        # Colonne gauche : liste des AAV
-        left_frame = ttk.LabelFrame(content_frame, text="Liste des AAV", padding=10)
-        left_frame.pack(side="left", fill="both", expand=True, padx=(0, 10))
-
-        self.tree = ttk.Treeview(
-            left_frame,
-            columns=("id", "nom", "discipline", "type"),
-            show="headings",
-            height=20
+    def build_layout(self) -> None:
+        """Construit l'interface principale."""
+        filters = ft.Row(
+            controls=[
+                self.discipline_field,
+                self.type_dropdown,
+                self.load_button,
+                self.reset_button,
+                self.create_button,
+            ],
+            alignment=ft.MainAxisAlignment.START,
+            vertical_alignment=ft.CrossAxisAlignment.END,
         )
 
-        self.tree.heading("id", text="ID")
-        self.tree.heading("nom", text="Nom")
-        self.tree.heading("discipline", text="Discipline")
-        self.tree.heading("type", text="Type")
+        left_column = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text("Liste des AAV", size=20, weight=ft.FontWeight.BOLD),
+                    self.aav_list,
+                ],
+                expand=True,
+            ),
+            padding=12,
+            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border_radius=12,
+            expand=1,
+        )
 
-        self.tree.column("id", width=60, anchor="center")
-        self.tree.column("nom", width=250)
-        self.tree.column("discipline", width=150)
-        self.tree.column("type", width=160)
+        right_column = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text("Détail de l'AAV", size=20, weight=ft.FontWeight.BOLD),
+                    self.detail_panel,
+                ],
+                expand=True,
+            ),
+            padding=12,
+            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border_radius=12,
+            expand=1,
+        )
 
-        self.tree.pack(fill="both", expand=True)
-        self.tree.bind("<<TreeviewSelect>>", self.on_select_aav)
+        self.page.add(
+            ft.Column(
+                controls=[
+                    ft.Text("Dashboard AAV", size=28, weight=ft.FontWeight.BOLD),
+                    filters,
+                    self.status_text,
+                    ft.Row(
+                        controls=[left_column, right_column],
+                        expand=True,
+                        vertical_alignment=ft.CrossAxisAlignment.START,
+                    ),
+                ],
+                expand=True,
+            )
+        )
 
-        # Colonne droite : détail
-        right_frame = ttk.LabelFrame(content_frame, text="Détail de l'AAV", padding=10)
-        right_frame.pack(side="right", fill="both", expand=True)
+    def set_status(self, message: str, error: bool = False) -> None:
+        """Affiche un message d'état."""
+        self.status_text.value = message
+        self.status_text.color = ft.Colors.RED if error else ft.Colors.GREEN
+        self.page.update()
 
-        self.detail_text = tk.Text(right_frame, wrap="word", state="disabled")
-        self.detail_text.pack(fill="both", expand=True)
+    def reset_filters(self, e: ft.ControlEvent) -> None:
+        """Réinitialise les filtres."""
+        self.discipline_field.value = ""
+        self.type_dropdown.value = ""
+        self.load_aavs()
 
-    def load_aavs(self):
-        """Charge les AAV depuis l'API et remplit le tableau."""
+    def load_aavs(self, e: ft.ControlEvent | None = None) -> None:
+        """Charge les AAV depuis l'API et remplit la liste."""
         try:
-            discipline = self.discipline_var.get().strip() or None
-            type_aav = self.type_var.get().strip() or None
+            self.set_status("", error=False)
 
-            self.current_aavs = self.api.get_aavs(discipline=discipline, type_aav=type_aav)
+            discipline = self.discipline_field.value.strip() or None
+            type_aav = self.type_dropdown.value or None
 
-            # Vider l'ancien contenu du tableau
-            for item in self.tree.get_children():
-                self.tree.delete(item)
+            self.current_aavs = self.api.get_aavs(
+                discipline=discipline,
+                type_aav=type_aav,
+            )
 
-            # Remplir avec les nouveaux AAV
-            for aav in self.current_aavs:
-                self.tree.insert(
-                    "",
-                    "end",
-                    values=(
-                        aav["id_aav"],
-                        aav["nom"],
-                        aav["discipline"],
-                        aav["type_aav"]
+            self.aav_list.controls.clear()
+
+            if not self.current_aavs:
+                self.aav_list.controls.append(ft.Text("Aucun AAV trouvé."))
+            else:
+                for aav in self.current_aavs:
+                    tile = ft.ListTile(
+                        title=ft.Text(f"{aav['id_aav']} - {aav['nom']}"),
+                        subtitle=ft.Text(f"{aav['discipline']} | {aav['type_aav']}"),
+                        trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT),
+                        on_click=lambda evt, aav_id=aav["id_aav"]: self.show_details(aav_id),
                     )
-                )
+                    self.aav_list.controls.append(ft.Card(content=tile))
 
-            self.clear_details()
+            self.detail_panel.content = ft.Text("Sélectionne un AAV dans la liste.")
+            self.page.update()
 
-        except Exception as e:
-            messagebox.showerror("Erreur API", f"Impossible de charger les AAV :\n{e}")
+        except requests.RequestException as exc:
+            self.set_status(f"Erreur réseau/API : {exc}", error=True)
+        except Exception as exc:
+            self.set_status(f"Erreur inattendue : {exc}", error=True)
 
-    def on_select_aav(self, event):
-        """Affiche le détail de l'AAV sélectionné dans le tableau."""
-        selected = self.tree.selection()
-        if not selected:
-            return
-
-        item = self.tree.item(selected[0])
-        values = item["values"]
-        if not values:
-            return
-
-        id_aav = values[0]
-
+    def show_details(self, id_aav: int) -> None:
+        """Charge le détail d'un AAV et l'affiche."""
         try:
             aav = self.api.get_aav(id_aav)
 
-            texte = (
-                f"ID : {aav['id_aav']}\n\n"
-                f"Nom : {aav['nom']}\n\n"
-                f"Discipline : {aav['discipline']}\n\n"
-                f"Enseignement : {aav['enseignement']}\n\n"
-                f"Type : {aav['type_aav']}\n\n"
-                f"Type d'évaluation : {aav['type_evaluation']}\n\n"
-                f"Pré-requis : {aav.get('prerequis_ids', [])}\n\n"
-                f"Description :\n{aav['description_markdown']}"
+            details = ft.Column(
+                controls=[
+                    ft.Text(f"ID : {aav['id_aav']}", selectable=True),
+                    ft.Text(f"Nom : {aav['nom']}", selectable=True),
+                    ft.Text(f"Discipline : {aav['discipline']}", selectable=True),
+                    ft.Text(f"Enseignement : {aav['enseignement']}", selectable=True),
+                    ft.Text(f"Type : {aav['type_aav']}", selectable=True),
+                    ft.Text(f"Évaluation : {aav['type_evaluation']}", selectable=True),
+                    ft.Text(f"Pré-requis : {aav.get('prerequis_ids', [])}", selectable=True),
+                    ft.Divider(),
+                    ft.Text("Description", weight=ft.FontWeight.BOLD),
+                    ft.Text(aav["description_markdown"], selectable=True),
+                ],
+                tight=True,
+                scroll=ft.ScrollMode.AUTO,
             )
 
-            self.detail_text.configure(state="normal")
-            self.detail_text.delete("1.0", tk.END)
-            self.detail_text.insert(tk.END, texte)
-            self.detail_text.configure(state="disabled")
+            self.detail_panel.content = details
+            self.page.update()
 
-        except Exception as e:
-            messagebox.showerror("Erreur API", f"Impossible de charger le détail de l'AAV :\n{e}")
+        except requests.RequestException as exc:
+            self.set_status(f"Erreur API détail : {exc}", error=True)
+        except Exception as exc:
+            self.set_status(f"Erreur inattendue : {exc}", error=True)
 
-    def clear_details(self):
-        """Vide la zone de détail."""
-        self.detail_text.configure(state="normal")
-        self.detail_text.delete("1.0", tk.END)
-        self.detail_text.configure(state="disabled")
+    def open_create_dialog(self, e):
+        self.dialog_error = ft.Text("", color=ft.Colors.RED)
 
-    def reset_filters(self):
-        """Réinitialise les filtres puis recharge la liste."""
-        self.discipline_var.set("")
-        self.type_var.set("")
-        self.load_aavs()
+        self.id_field = ft.TextField(
+            label="ID *",
+            value=str(self.get_next_aav_id()),
+            hint_text="ID numérique unique",
+            keyboard_type=ft.KeyboardType.NUMBER,
+        )
+        self.nom_field = ft.TextField(label="Nom")
+        self.libelle_field = ft.TextField(label="Libellé intégration (Minimum 5 caractères)")
+        self.discipline_field_form = ft.TextField(label="Discipline")
+        self.enseignement_field = ft.TextField(label="Enseignement")
+        self.description_field = ft.TextField(label="Description (Minimum 10 caractères)", multiline=True)
+
+        self.type_dropdown_form = ft.Dropdown(
+            label="Type AAV",
+            value="Atomique",
+            options=[
+                ft.dropdown.Option("Atomique"),
+                ft.dropdown.Option("Composite (Chapitre)"),
+            ],
+        )
+
+        self.prerequis_field = ft.TextField(label="Pré-requis (ids séparés par ,)")
+
+        self.type_eval_dropdown = ft.Dropdown(
+            label="Type évaluation",
+            value="Humaine",
+            options=[
+                ft.dropdown.Option("Humaine"),
+                ft.dropdown.Option("Calcul Automatisé"),
+                ft.dropdown.Option("Compréhension par Chute"),
+                ft.dropdown.Option("Validation par Invention"),
+                ft.dropdown.Option("Exercice de Critique"),
+                ft.dropdown.Option("Évaluation par les Pairs"),
+                ft.dropdown.Option("Agrégation (Composite)"),
+            ],
+        )
+
+        self.dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Créer un AAV"),
+            content=ft.Container(
+                width=500,
+                content=ft.Column(
+                    controls=[
+                        self.id_field,
+                        self.nom_field,
+                        self.libelle_field,
+                        self.discipline_field_form,
+                        self.enseignement_field,
+                        self.type_dropdown_form,
+                        self.description_field,
+                        self.prerequis_field,
+                        self.type_eval_dropdown,
+                        self.dialog_error,
+                    ],
+                    tight=True,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
+            ),
+            actions=[
+                ft.TextButton("Annuler", on_click=lambda e: self.close_dialog()),
+                ft.FilledButton("Créer", on_click=self.create_aav_action),
+            ],
+        )
+
+        if self.dialog not in self.page.overlay:
+            self.page.overlay.append(self.dialog)
+
+        self.dialog.open = True
+        self.page.update()
+
+
+    def get_next_aav_id(self) -> int:
+        """Retourne le prochain ID disponible à partir des AAV déjà chargés."""
+        if not self.current_aavs:
+            return 1
+
+        ids = [aav["id_aav"] for aav in self.current_aavs if "id_aav" in aav]
+        return max(ids) + 1 if ids else 1
+
+    def close_dialog(self):
+        self.dialog.open = False
+        self.page.update()
+            
+    def create_aav_action(self, e):
+        self.dialog_error.value = ""
+
+        try:
+            if not self.id_field.value:
+                self.dialog_error.value = "ID obligatoire"
+                self.page.update()
+                return
+
+            if not self.nom_field.value:
+                self.dialog_error.value = "Nom obligatoire"
+                self.page.update()
+                return
+
+            if not self.libelle_field.value:
+                self.dialog_error.value = "Libellé obligatoire"
+                self.page.update()
+                return
+
+            if not self.discipline_field_form.value:
+                self.dialog_error.value = "Discipline obligatoire"
+                self.page.update()
+                return
+
+            if not self.enseignement_field.value:
+                self.dialog_error.value = "Enseignement obligatoire"
+                self.page.update()
+                return
+
+            if not self.description_field.value:
+                self.dialog_error.value = "Description obligatoire"
+                self.page.update()
+                return
+
+            prerequis = []
+            if self.prerequis_field.value and self.prerequis_field.value.strip():
+                prerequis = [
+                    int(x.strip())
+                    for x in self.prerequis_field.value.split(",")
+                    if x.strip()
+                ]
+
+            type_aav = self.type_dropdown_form.value
+
+            if type_aav == "Composite (Chapitre)" and not prerequis:
+                self.dialog_error.value = "Un AAV composite doit avoir au moins un pré-requis."
+                self.page.update()
+                return
+
+            payload = {
+                "id_aav": int(self.id_field.value),
+                "nom": self.nom_field.value.strip(),
+                "libelle_integration": self.libelle_field.value.strip(),
+                "discipline": self.discipline_field_form.value.strip(),
+                "enseignement": self.enseignement_field.value.strip(),
+                "type_aav": type_aav,
+                "description_markdown": self.description_field.value.strip(),
+                "prerequis_ids": prerequis,
+                "prerequis_externes_codes": [],
+                "code_prerequis_interdisciplinaire": None,
+                "type_evaluation": self.type_eval_dropdown.value,
+            }
+
+            created = self.api.create_aav(payload)
+
+            self.close_dialog()
+            self.load_aavs()
+            self.set_status(f"AAV créé : {created['nom']}")
+
+        except ValueError:
+            self.dialog_error.value = "ID / prérequis invalides"
+            self.page.update()
+        except Exception as exc:
+            self.dialog_error.value = str(exc)
+            self.page.update()
+
+def main(page: ft.Page) -> None:
+    """Point d'entrée Flet."""
+    AAVExplorerApp(page)
 
 
 if __name__ == "__main__":
-    app = AAVApp()
-    app.mainloop()
+    ft.run(main)

@@ -74,3 +74,10 @@ pytest --cov=app --cov-report=html
 # Tests d'un fichier spécifique
 pytest tests/test_profond.py -v
 ```
+
+Installation et lancement
+
+Depuis client_flet/ :
+
+pip install -r requirements.txt
+flet run main.py
