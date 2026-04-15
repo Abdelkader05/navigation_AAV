@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import sqlite3
+from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException
 
 from app.database import from_json, get_db_connection, to_json
+from app.maitrise import calculer_maitrise, message
 from app.models import Process, Tentative, TentativeCreate
 
 router = APIRouter(tags=["Tentatives"])
@@ -12,41 +14,74 @@ router = APIRouter(tags=["Tentatives"])
 
 def row_to_tentative(row: sqlite3.Row) -> Tentative:
     data = dict(row)
-    data["est_valide"] = bool(data.get("est_valide", 0))
+    # SQLite stocke les booléens sous forme 0/1.
+    data["est_valide"] = (data.get("est_valide", 0) == 1)
     meta = data.get("metadata")
+    # Les métadonnées sont stockées en JSON texte dans SQLite.
     data["metadata"] = from_json(meta) if meta else None
     return Tentative(**data)
 
 
-def calculer_maitrise(scores: list[float], seuil_succes: float = 0.9, succes_consecutifs: int = 5) -> float:
-    if not scores:
-        return 0.0
+@router.get("/attempts", response_model=List[Tentative])
+def list_attempts(
+    id_apprenant: Optional[int] = None,
+    id_aav_cible: Optional[int] = None,
+    est_valide: Optional[bool] = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    # Cette route vient du groupe 3 et permet au client ou aux tests
+    # d'inspecter les tentatives sans logique métier supplémentaire.
+    query = "SELECT * FROM tentative"
+    where = []
+    params = []
 
-    succes = 0
-    for score in reversed(scores):
-        if score >= seuil_succes:
-            succes += 1
-        else:
-            break
+    if id_apprenant is not None:
+        where.append("id_apprenant = ?")
+        params.append(id_apprenant)
 
-    return min(1.0, succes / succes_consecutifs)
+    if id_aav_cible is not None:
+        where.append("id_aav_cible = ?")
+        params.append(id_aav_cible)
+
+    if est_valide is not None:
+        where.append("est_valide = ?")
+        params.append(1 if est_valide else 0)
+
+    if where:
+        query += " WHERE " + " AND ".join(where)
+
+    query += " ORDER BY date_tentative DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute(query, tuple(params))
+        rows = cur.fetchall()
+
+    return [row_to_tentative(r) for r in rows]
 
 
-def build_process_message(ancien: float, nouveau: float) -> str:
-    if nouveau >= 1.0:
-        return "AAV maitrise apres traitement de la tentative."
-    if nouveau > ancien:
-        return "La tentative a fait progresser le niveau de maitrise."
-    if nouveau == ancien:
-        return "La tentative n'a pas modifie le niveau de maitrise."
-    return "Le niveau de maitrise a baisse apres traitement de la tentative."
+@router.get("/attempts/{id}", response_model=Tentative)
+def get_attempt(id: int):
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM tentative WHERE id = ?", (id,))
+        row = cur.fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Tentative introuvable: id={id}")
+
+    return row_to_tentative(row)
 
 
 @router.post("/attempts", response_model=Tentative, status_code=201)
 def create_attempt(payload: TentativeCreate):
+    # On garde ici le contrat du groupe 3: la tentative est créée
+    # d'abord, puis traitée séparément par /attempts/{id}/process.
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
+        cur = conn.cursor()
+        cur.execute(
             """
             INSERT INTO tentative (
                 id_exercice_ou_evenement,
@@ -68,64 +103,79 @@ def create_attempt(payload: TentativeCreate):
                 to_json(payload.metadata) if payload.metadata is not None else None,
             ),
         )
-        new_id = cursor.lastrowid
-        cursor.execute("SELECT * FROM tentative WHERE id = ?", (new_id,))
-        row = cursor.fetchone()
+        new_id = cur.lastrowid
+
+        cur.execute("SELECT * FROM tentative WHERE id = ?", (new_id,))
+        row = cur.fetchone()
 
     if row is None:
-        raise HTTPException(status_code=500, detail="Tentative creee mais introuvable")
+        raise HTTPException(status_code=500, detail="Tentative créée mais introuvable")
 
     return row_to_tentative(row)
 
 
-@router.post("/attempts/{attempt_id}/process", response_model=Process)
-def process_attempt(attempt_id: int):
+@router.delete("/attempts/{id}", status_code=204)
+def delete_attempt(id: int):
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tentative WHERE id = ?", (attempt_id,))
-        attempt = cursor.fetchone()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM tentative WHERE id = ?", (id,))
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Tentative introuvable: id={id}")
+    return
+
+
+@router.post("/attempts/{id}/process", response_model=Process)
+def process_attempt(id: int):
+    """
+    Reprise quasi directe du traitement du groupe 3.
+    """
+    SEUIL_SUCCES = 0.9
+    N_SUCCES_CONSEC = 5
+
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+
+        cur.execute("SELECT * FROM tentative WHERE id = ?", (id,))
+        attempt = cur.fetchone()
         if attempt is None:
-            raise HTTPException(status_code=404, detail=f"Tentative introuvable: id={attempt_id}")
+            raise HTTPException(status_code=404, detail=f"Tentative introuvable: id={id}")
 
         id_apprenant = attempt["id_apprenant"]
         id_aav_cible = attempt["id_aav_cible"]
 
-        cursor.execute(
-            """
-            SELECT * FROM statut_apprentissage
-            WHERE id_apprenant = ? AND id_aav_cible = ?
-            """,
+        # Le traitement crée automatiquement le statut s'il n'existe pas encore,
+        # comme dans l'implémentation du groupe 3.
+        cur.execute(
+            "SELECT * FROM statut_apprentissage WHERE id_apprenant = ? AND id_aav_cible = ?",
             (id_apprenant, id_aav_cible),
         )
-        statut = cursor.fetchone()
+        statut = cur.fetchone()
 
         if statut is None:
-            cursor.execute(
+            cur.execute(
                 """
-                INSERT INTO statut_apprentissage (
-                    id_apprenant,
-                    id_aav_cible,
-                    niveau_maitrise,
-                    historique_tentatives_ids
-                ) VALUES (?, ?, 0.0, ?)
+                INSERT INTO statut_apprentissage (id_apprenant, id_aav_cible, niveau_maitrise, historique_tentatives_ids)
+                VALUES (?, ?, 0.0, ?)
                 """,
                 (id_apprenant, id_aav_cible, to_json([])),
             )
-            cursor.execute(
-                """
-                SELECT * FROM statut_apprentissage
-                WHERE id_apprenant = ? AND id_aav_cible = ?
-                """,
+            cur.execute(
+                "SELECT * FROM statut_apprentissage WHERE id_apprenant = ? AND id_aav_cible = ?",
                 (id_apprenant, id_aav_cible),
             )
-            statut = cursor.fetchone()
+            statut = cur.fetchone()
 
         ancien_niveau = float(statut["niveau_maitrise"] or 0.0)
-        historique = from_json(statut["historique_tentatives_ids"]) if statut["historique_tentatives_ids"] else []
-        if attempt_id not in historique:
-            historique.append(attempt_id)
 
-        cursor.execute(
+        # L'historique garde uniquement les IDs des tentatives déjà traitées.
+        hist_raw = statut["historique_tentatives_ids"]
+        hist = from_json(hist_raw) if hist_raw else []
+        if id not in hist:
+            hist.append(id)
+
+        # Le nouveau niveau est calculé à partir de tout l'historique
+        # de scores pour cet apprenant et cet AAV.
+        cur.execute(
             """
             SELECT score_obtenu
             FROM tentative
@@ -134,11 +184,14 @@ def process_attempt(attempt_id: int):
             """,
             (id_apprenant, id_aav_cible),
         )
-        scores = [float(row["score_obtenu"]) for row in cursor.fetchall()]
-        nouveau_niveau = calculer_maitrise(scores)
-        est_maitrise = nouveau_niveau >= 1.0
+        scores = [float(r["score_obtenu"]) for r in cur.fetchall()]
 
-        cursor.execute(
+        nouveau_niveau = calculer_maitrise(scores, SEUIL_SUCCES, N_SUCCES_CONSEC)
+        est_maitrise = nouveau_niveau >= 1.0
+        msg = message(ancien_niveau, nouveau_niveau, est_maitrise, N_SUCCES_CONSEC)
+
+        # Le statut est la seule source de vérité mise à jour après traitement.
+        cur.execute(
             """
             UPDATE statut_apprentissage
             SET niveau_maitrise = ?,
@@ -146,15 +199,15 @@ def process_attempt(attempt_id: int):
                 date_derniere_session = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (nouveau_niveau, to_json(historique), statut["id"]),
+            (nouveau_niveau, to_json(hist), statut["id"]),
         )
 
     return Process(
-        tentative_id=attempt_id,
+        tentative_id=id,
         id_apprenant=id_apprenant,
         id_aav_cible=id_aav_cible,
         ancien_niveau=ancien_niveau,
         nouveau_niveau=nouveau_niveau,
         est_maitrise=est_maitrise,
-        message=build_process_message(ancien_niveau, nouveau_niveau),
+        message=msg,
     )
