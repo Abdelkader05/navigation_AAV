@@ -14,10 +14,8 @@ router = APIRouter(tags=["Tentatives"])
 
 def row_to_tentative(row: sqlite3.Row) -> Tentative:
     data = dict(row)
-    # SQLite stocke les booléens sous forme 0/1.
     data["est_valide"] = (data.get("est_valide", 0) == 1)
     meta = data.get("metadata")
-    # Les métadonnées sont stockées en JSON texte dans SQLite.
     data["metadata"] = from_json(meta) if meta else None
     return Tentative(**data)
 
@@ -30,8 +28,6 @@ def list_attempts(
     limit: int = 100,
     offset: int = 0,
 ):
-    # Cette route vient du groupe 3 et permet au client ou aux tests
-    # d'inspecter les tentatives sans logique métier supplémentaire.
     query = "SELECT * FROM tentative"
     where = []
     params = []
@@ -77,8 +73,6 @@ def get_attempt(id: int):
 
 @router.post("/attempts", response_model=Tentative, status_code=201)
 def create_attempt(payload: TentativeCreate):
-    # On garde ici le contrat du groupe 3: la tentative est créée
-    # d'abord, puis traitée séparément par /attempts/{id}/process.
     with get_db_connection() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -126,9 +120,6 @@ def delete_attempt(id: int):
 
 @router.post("/attempts/{id}/process", response_model=Process)
 def process_attempt(id: int):
-    """
-    Reprise quasi directe du traitement du groupe 3.
-    """
     SEUIL_SUCCES = 0.9
     N_SUCCES_CONSEC = 5
 
@@ -143,8 +134,6 @@ def process_attempt(id: int):
         id_apprenant = attempt["id_apprenant"]
         id_aav_cible = attempt["id_aav_cible"]
 
-        # Le traitement crée automatiquement le statut s'il n'existe pas encore,
-        # comme dans l'implémentation du groupe 3.
         cur.execute(
             "SELECT * FROM statut_apprentissage WHERE id_apprenant = ? AND id_aav_cible = ?",
             (id_apprenant, id_aav_cible),
@@ -167,14 +156,11 @@ def process_attempt(id: int):
 
         ancien_niveau = float(statut["niveau_maitrise"] or 0.0)
 
-        # L'historique garde uniquement les IDs des tentatives déjà traitées.
         hist_raw = statut["historique_tentatives_ids"]
         hist = from_json(hist_raw) if hist_raw else []
         if id not in hist:
             hist.append(id)
 
-        # Le nouveau niveau est calculé à partir de tout l'historique
-        # de scores pour cet apprenant et cet AAV.
         cur.execute(
             """
             SELECT score_obtenu
@@ -190,7 +176,6 @@ def process_attempt(id: int):
         est_maitrise = nouveau_niveau >= 1.0
         msg = message(ancien_niveau, nouveau_niveau, est_maitrise, N_SUCCES_CONSEC)
 
-        # Le statut est la seule source de vérité mise à jour après traitement.
         cur.execute(
             """
             UPDATE statut_apprentissage

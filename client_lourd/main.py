@@ -596,6 +596,37 @@ class AAVExplorerApp:
         try:
             learner_id = int(self.learner_dropdown.value)
             summary = self.api.get_learner_summary(learner_id)
+            learning_status = self.api.get_learning_status(learner_id)
+            aav_lookup = {aav["id_aav"]: aav for aav in self.api.get_aavs()}
+
+            status_rows = []
+            for status in learning_status:
+                aav_id = status.get("id_aav_cible")
+                aav = aav_lookup.get(aav_id, {})
+                aav_name = aav.get("nom", "AAV inconnu")
+                mastery = status.get("niveau_maitrise", 0)
+
+                mastery_label = "maitrise" if mastery >= 0.9 else "en cours" if mastery > 0 else "non commence"
+
+                status_rows.append(
+                    ft.Container(
+                        content=ft.Column(
+                            controls=[
+                                ft.Text(f"AAV {aav_id} - {aav_name}", weight=ft.FontWeight.BOLD),
+                                ft.Text(f"Niveau de maitrise : {mastery}"),
+                                ft.Text(f"Etat : {mastery_label}"),
+                            ],
+                            tight=True,
+                            spacing=2,
+                        ),
+                        padding=10,
+                        border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
+                        border_radius=10,
+                    )
+                )
+
+            if not status_rows:
+                status_rows.append(ft.Text("Aucun statut d'apprentissage pour cet apprenant."))
 
             content = ft.Column(
                 controls=[
@@ -605,8 +636,13 @@ class AAVExplorerApp:
                     ft.Text(f"AAV en cours : {summary.get('en_cours', 'N/A')}"),
                     ft.Text(f"AAV non commences : {summary.get('non_commence', 'N/A')}"),
                     ft.Text(f"Taux de maitrise global : {summary.get('taux_maitrise_global', 'N/A')}%"),
+                    ft.Divider(),
+                    ft.Text("Detail des AAV suivis", weight=ft.FontWeight.BOLD, size=16),
+                    *status_rows,
                 ],
                 tight=True,
+                spacing=8,
+                scroll=ft.ScrollMode.AUTO,
             )
 
             self.learner_summary_panel.content = content

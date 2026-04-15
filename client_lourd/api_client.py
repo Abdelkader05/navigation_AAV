@@ -76,10 +76,6 @@ class APIClient:
     # =========================
 
     def get_learners(self) -> list[dict]:
-        """
-        Suppose une route GET /learners/
-        qui renvoie une liste d'apprenants.
-        """
         response = requests.get(
             f"{self.base_url}/learners/",
             timeout=10,
@@ -97,6 +93,21 @@ class APIClient:
     def get_learner_summary(self, id_apprenant: int) -> dict:
         response = requests.get(
             f"{self.base_url}/learners/{id_apprenant}/learning-status/summary",
+            timeout=10,
+        )
+
+        if response.status_code >= 400:
+            try:
+                detail = response.json()
+            except Exception:
+                detail = response.text
+            raise Exception(f"{response.status_code} - {detail}")
+
+        return response.json()
+
+    def get_learning_status(self, id_apprenant: int) -> list[dict]:
+        response = requests.get(
+            f"{self.base_url}/learners/{id_apprenant}/learning-status",
             timeout=10,
         )
 
