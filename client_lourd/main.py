@@ -600,9 +600,11 @@ class AAVExplorerApp:
             content = ft.Column(
                 controls=[
                     ft.Text(f"ID apprenant : {summary.get('id_apprenant', learner_id)}"),
-                    ft.Text(f"Nom utilisateur : {summary.get('nom_utilisateur', 'N/A')}"),
-                    ft.Text(f"Niveau global : {summary.get('niveau_global', 'N/A')}"),
-                    ft.Text(f"Nombre de statuts : {summary.get('nombre_statuts', 'N/A')}"),
+                    ft.Text(f"Total AAV suivis : {summary.get('total', 'N/A')}"),
+                    ft.Text(f"AAV maitrises : {summary.get('maitrise', 'N/A')}"),
+                    ft.Text(f"AAV en cours : {summary.get('en_cours', 'N/A')}"),
+                    ft.Text(f"AAV non commences : {summary.get('non_commence', 'N/A')}"),
+                    ft.Text(f"Taux de maitrise global : {summary.get('taux_maitrise_global', 'N/A')}%"),
                 ],
                 tight=True,
             )
@@ -614,7 +616,7 @@ class AAVExplorerApp:
         except Exception as exc:
             self.set_status(
                 "Impossible de charger le résumé apprenant. "
-                "Vérifie que l'API expose GET /learners/{id}/summary .",
+                "Vérifie que l'API expose GET /learners/{id}/learning-status/summary .",
                 error=True,
             )
 
@@ -640,8 +642,9 @@ class AAVExplorerApp:
                 "score_obtenu": score,
             }
 
-            result = self.api.simulate_tentative(payload)
-            self.set_status("Tentative simulée avec succès.")
+            created_attempt = self.api.create_attempt(payload)
+            process_result = self.api.process_attempt(created_attempt["id"])
+            self.set_status(process_result.get("message", "Tentative traitee avec succes."))
             self.load_learner_summary(None)
 
         except ValueError:
@@ -649,7 +652,7 @@ class AAVExplorerApp:
         except Exception as exc:
             self.set_status(
                 "Impossible de simuler la tentative. "
-                "Vérifie que l'API expose POST /tentatives/simulate .",
+                "Vérifie que l'API expose POST /attempts puis POST /attempts/{id}/process .",
                 error=True,
             )
 

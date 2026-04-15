@@ -38,7 +38,8 @@ tests/
 
 Les résultats sont mis en cache dans `navigation_cache` pour éviter les recalculs.
 
-
+python3 -m venv venv
+source venv/bin/activate
 #### Installation et lancement
 
 ```bash

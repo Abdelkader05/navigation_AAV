@@ -9,6 +9,7 @@ from app.routers import aavs  # Chaque groupe importe ses routers
 from app.routers import navigation
 from app.routers import remediation
 from app.routers import learners
+from app.routers import attempts
 
 
 @asynccontextmanager
@@ -42,7 +43,8 @@ app = FastAPI(
 app.include_router(aavs.router)
 app.include_router(navigation.router)
 app.include_router(remediation.router)
-app.include_router(learners)
+app.include_router(learners.router)
+app.include_router(attempts.router)
 # app.include_router(learners.router)  # Décommenter selon le groupe
 
 @app.get("/")

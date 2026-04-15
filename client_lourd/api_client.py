@@ -95,18 +95,8 @@ class APIClient:
         return response.json()
 
     def get_learner_summary(self, id_apprenant: int) -> dict:
-        """
-        Suppose une route GET /learners/{id}/summary
-        qui renvoie par exemple :
-        {
-            "id_apprenant": 1,
-            "nom_utilisateur": "alice",
-            "niveau_global": 0.67,
-            "nombre_statuts": 12
-        }
-        """
         response = requests.get(
-            f"{self.base_url}/learners/{id_apprenant}/summary",
+            f"{self.base_url}/learners/{id_apprenant}/learning-status/summary",
             timeout=10,
         )
 
@@ -119,20 +109,25 @@ class APIClient:
 
         return response.json()
 
-    def simulate_tentative(self, payload: dict) -> dict:
-        """
-        Suppose une route POST /tentatives/simulate
-        avec un payload du style :
-        {
-            "id_apprenant": 1,
-            "id_aav_cible": 2,
-            "id_exercice_ou_evenement": 1001,
-            "score_obtenu": 0.75
-        }
-        """
+    def create_attempt(self, payload: dict) -> dict:
         response = requests.post(
-            f"{self.base_url}/tentatives/simulate",
+            f"{self.base_url}/attempts",
             json=payload,
+            timeout=10,
+        )
+
+        if response.status_code >= 400:
+            try:
+                detail = response.json()
+            except Exception:
+                detail = response.text
+            raise Exception(f"{response.status_code} - {detail}")
+
+        return response.json()
+
+    def process_attempt(self, attempt_id: int) -> dict:
+        response = requests.post(
+            f"{self.base_url}/attempts/{attempt_id}/process",
             timeout=10,
         )
 

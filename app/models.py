@@ -1,5 +1,5 @@
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional, List, Literal
 from enum import Enum
 from datetime import datetime
@@ -252,3 +252,100 @@ class LearnerUpdate(BaseModel):  # Maintenant on est convaincu
 
 class Learner(LearnerBase):  # ? a rajouter
     model_config = ConfigDict(from_attributes=True)
+
+
+class LearningStatus(BaseModel):
+    id: int
+    id_apprenant: int
+    id_aav_cible: int
+    niveau_maitrise: float
+    historique_tentatives_ids: List[int] = Field(default_factory=list)
+    date_debut_apprentissage: Optional[datetime] = None
+    date_derniere_session: Optional[datetime] = None
+    est_maitrise: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LearningStatusSummary(BaseModel):
+    id_apprenant: int
+    total: int
+    maitrise: int
+    en_cours: int
+    non_commence: int
+    taux_maitrise_global: float
+
+
+class ExternalPrerequisiteBase(BaseModel):
+    code_prerequis: str = Field(..., min_length=1)
+    validated_by: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class ExternalPrerequisiteCreate(ExternalPrerequisiteBase):
+    pass
+
+
+class ExternalPrerequisite(ExternalPrerequisiteBase):
+    id_apprenant: int
+    date_validation: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OntologyReference(BaseModel):
+    id_reference: int
+    discipline: str
+    aavs_ids_actifs: List[int] = Field(default_factory=list)
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class OntologySwitchResponse(BaseModel):
+    success: bool
+    message: str
+    id_apprenant: int
+    ancienne_ontologie_id: Optional[int] = None
+    nouvelle_ontologie_id: int
+
+
+class ProgressResponse(BaseModel):
+    id_apprenant: int
+    ontologie_reference_id: int
+    total_aavs: int
+    aavs_maitrise: int
+    taux_progression: float
+
+
+class TentativeBase(BaseModel):
+    id_exercice_ou_evenement: int
+    id_apprenant: int
+    id_aav_cible: int
+    score_obtenu: float = Field(..., ge=0.0, le=1.0)
+    est_valide: bool = False
+    temps_resolution_secondes: Optional[int] = None
+    metadata: Optional[dict] = None
+
+
+class TentativeCreate(TentativeBase):
+    pass
+
+
+class Tentative(TentativeBase):
+    id: int
+    date_tentative: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Process(BaseModel):
+    tentative_id: int
+    id_apprenant: int
+    id_aav_cible: int
+    ancien_niveau: float
+    nouveau_niveau: float
+    est_maitrise: bool
+    message: str
