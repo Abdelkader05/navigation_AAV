@@ -199,3 +199,56 @@ class DiagnosticRemediationRead(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+
+
+class LearnerBase(BaseModel):  # ?voir quoi retirer
+    id_apprenant: int = Field(..., gt=0)
+    nom_utilisateur: str = Field(..., min_length=1,
+                                 description="Nom de l'apprenti")
+    email: str = Field(description="E-mail de l'apprenti")
+    # Car on veux pouvoir accepter None
+    ontologie_reference_id: Optional[int] = None
+    statuts_actifs_ids: List[int] = Field(default_factory=list)
+    codes_prerequis_externes_valides: List[str] = Field(default_factory=list)
+    date_inscription: Optional[datetime] = None
+    derniere_connexion: Optional[datetime] = None
+    is_active: bool = True  # on met a True direct et on changera au cas ou
+
+    @field_validator('email')
+    @classmethod
+    def test_email_valide(cls, value: str) -> str:
+        if '@' not in value or '.' not in value.split(
+                '@')[-1]:  # comme ça on autorise les .fr .org etc
+            raise ValueError(
+                "Invalid email format (supposed to be exemple@xyz.com)")
+        return value.lower()
+
+    @field_validator('statuts_actifs_ids',
+                     'codes_prerequis_externes_valides',
+                     mode='before')
+    @classmethod
+    def parse_json_list(cls, v):
+        """Convertit automatiquement les strings JSON en listes."""
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except BaseException:
+                return []
+        return v or []
+
+
+class LearnerCreate(LearnerBase):  # ? rajouter les choses retirées
+    pass
+
+
+class LearnerUpdate(BaseModel):  # Maintenant on est convaincu
+    ontologie_reference_id: Optional[int] = None
+    statuts_actifs_ids: Optional[List[int]] = None
+    codes_prerequis_externes_valides: Optional[List[str]] = None
+
+
+class Learner(LearnerBase):  # ? a rajouter
+    model_config = ConfigDict(from_attributes=True)

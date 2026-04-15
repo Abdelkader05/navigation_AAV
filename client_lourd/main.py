@@ -12,13 +12,17 @@ class AAVExplorerApp:
         self.api = APIClient()
         self.current_aavs: list[dict] = []
         self.selected_aav: dict | None = None
+        self.current_learners: list[dict] = []
 
         self.page.title = "L'Architecte du Savoir - Client lourd"
-        self.page.window_width = 1200
-        self.page.window_height = 700
+        self.page.window_width = 1300
+        self.page.window_height = 760
         self.page.padding = 16
         self.page.scroll = ft.ScrollMode.AUTO
 
+        # =========================
+        # AAV controls
+        # =========================
         self.discipline_field = ft.TextField(
             label="Discipline",
             hint_text="Ex: Mathématiques",
@@ -39,13 +43,18 @@ class AAVExplorerApp:
         self.load_button = ft.FilledButton("Appliquer", on_click=self.load_aavs)
         self.reset_button = ft.OutlinedButton("Réinitialiser", on_click=self.reset_filters)
         self.create_button = ft.FilledButton("Créer AAV", on_click=self.open_create_dialog)
+
         self.edit_prereq_button = ft.OutlinedButton(
             "Modifier prérequis",
             on_click=self.open_edit_prereq_dialog,
             disabled=True,
         )
 
-        self.aav_list = ft.ListView(expand=True, spacing=6, auto_scroll=False)
+        self.aav_list = ft.ListView(
+            expand=True,
+            spacing=6,
+            auto_scroll=False,
+        )
 
         self.detail_panel = ft.Container(
             content=ft.Text("Sélectionne un AAV dans la liste."),
@@ -55,13 +64,63 @@ class AAVExplorerApp:
             border_radius=12,
         )
 
+        # =========================
+        # Phase 3 controls
+        # =========================
+        self.learner_dropdown = ft.Dropdown(
+            label="Apprenant",
+            width=300,
+            options=[],
+        )
+
+        self.load_learner_button = ft.FilledButton(
+            "Charger apprenant",
+            on_click=self.load_learner_summary,
+        )
+
+        self.learner_summary_panel = ft.Container(
+            content=ft.Text("Choisis un apprenant puis clique sur 'Charger apprenant'."),
+            padding=16,
+            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border_radius=12,
+        )
+
+        self.sim_aav_id_field = ft.TextField(
+            label="ID AAV cible",
+            width=180,
+            keyboard_type=ft.KeyboardType.NUMBER,
+        )
+
+        self.sim_exercice_field = ft.TextField(
+            label="ID exercice",
+            width=180,
+            value="1001",
+            keyboard_type=ft.KeyboardType.NUMBER,
+        )
+
+        self.sim_score_field = ft.TextField(
+            label="Score (0 à 1)",
+            width=180,
+            value="0.8",
+        )
+
+        self.simulate_button = ft.FilledButton(
+            "Simuler Tentative",
+            on_click=self.simulate_tentative_action,
+        )
+
         self.status_text = ft.Text("", color=ft.Colors.RED)
 
         self.build_layout()
         self.load_aavs()
+        self.load_learners()
+
+    # =====================================================
+    # LAYOUT
+    # =====================================================
 
     def build_layout(self) -> None:
-        filters = ft.Row(
+        aav_filters = ft.Row(
             controls=[
                 self.discipline_field,
                 self.type_dropdown,
@@ -107,37 +166,77 @@ class AAVExplorerApp:
             expand=1,
         )
 
+        phase3_block = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Text("Phase 3 - Suivi apprenant", size=22, weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        controls=[
+                            self.learner_dropdown,
+                            self.load_learner_button,
+                        ]
+                    ),
+                    self.learner_summary_panel,
+                    ft.Divider(),
+                    ft.Text("Simulation de tentative", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        controls=[
+                            self.sim_aav_id_field,
+                            self.sim_exercice_field,
+                            self.sim_score_field,
+                            self.simulate_button,
+                        ],
+                        wrap=True,
+                    ),
+                ],
+                tight=True,
+                spacing=12,
+            ),
+            padding=12,
+            border=ft.Border.all(1, ft.Colors.OUTLINE),
+            border_radius=12,
+        )
+
         self.page.add(
             ft.Column(
                 controls=[
                     ft.Text("Dashboard AAV", size=28, weight=ft.FontWeight.BOLD),
-                    filters,
+                    aav_filters,
                     self.status_text,
                     ft.Row(
                         controls=[left_column, right_column],
                         expand=True,
                         vertical_alignment=ft.CrossAxisAlignment.START,
                     ),
+                    phase3_block,
                 ],
                 expand=True,
             )
         )
+
+    # =====================================================
+    # COMMON
+    # =====================================================
 
     def set_status(self, message: str, error: bool = False) -> None:
         self.status_text.value = message
         self.status_text.color = ft.Colors.RED if error else ft.Colors.GREEN
         self.page.update()
 
-    def reset_filters(self, e: ft.ControlEvent) -> None:
-        self.discipline_field.value = ""
-        self.type_dropdown.value = ""
-        self.load_aavs()
-
     def get_next_aav_id(self) -> int:
         if not self.current_aavs:
             return 1
         ids = [aav["id_aav"] for aav in self.current_aavs if "id_aav" in aav]
         return max(ids) + 1 if ids else 1
+
+    # =====================================================
+    # AAV - LIST / DETAIL
+    # =====================================================
+
+    def reset_filters(self, e: ft.ControlEvent) -> None:
+        self.discipline_field.value = ""
+        self.type_dropdown.value = ""
+        self.load_aavs()
 
     def load_aavs(self, e: ft.ControlEvent | None = None) -> None:
         try:
@@ -205,6 +304,10 @@ class AAVExplorerApp:
             self.set_status(f"Erreur API détail : {exc}", error=True)
         except Exception as exc:
             self.set_status(f"Erreur inattendue : {exc}", error=True)
+
+    # =====================================================
+    # PHASE 2 - CREATE AAV
+    # =====================================================
 
     def open_create_dialog(self, e):
         self.dialog_error = ft.Text("", color=ft.Colors.RED)
@@ -363,6 +466,10 @@ class AAVExplorerApp:
             self.dialog_error.value = str(exc)
             self.page.update()
 
+    # =====================================================
+    # PHASE 2 - EDIT PREREQUIS
+    # =====================================================
+
     def open_edit_prereq_dialog(self, e):
         if not self.selected_aav:
             self.set_status("Aucun AAV sélectionné.", error=True)
@@ -447,6 +554,104 @@ class AAVExplorerApp:
     def close_edit_dialog(self):
         self.edit_dialog.open = False
         self.page.update()
+
+    # =====================================================
+    # PHASE 3 - LEARNERS
+    # =====================================================
+
+    def load_learners(self) -> None:
+        try:
+            learners = self.api.get_learners()
+            self.current_learners = learners
+
+            options = []
+            for learner in learners:
+                learner_id = learner.get("id_apprenant")
+                username = learner.get("nom_utilisateur", f"Apprenant {learner_id}")
+                options.append(
+                    ft.dropdown.Option(
+                        key=str(learner_id),
+                        text=f"{learner_id} - {username}",
+                    )
+                )
+
+            self.learner_dropdown.options = options
+            if options:
+                self.learner_dropdown.value = options[0].key
+
+            self.page.update()
+
+        except Exception as exc:
+            self.set_status(
+                "Phase 3 : impossible de charger les apprenants. "
+                "Vérifie que l'API expose GET /learners/ .",
+                error=True,
+            )
+
+    def load_learner_summary(self, e):
+        if not self.learner_dropdown.value:
+            self.set_status("Choisis un apprenant.", error=True)
+            return
+
+        try:
+            learner_id = int(self.learner_dropdown.value)
+            summary = self.api.get_learner_summary(learner_id)
+
+            content = ft.Column(
+                controls=[
+                    ft.Text(f"ID apprenant : {summary.get('id_apprenant', learner_id)}"),
+                    ft.Text(f"Nom utilisateur : {summary.get('nom_utilisateur', 'N/A')}"),
+                    ft.Text(f"Niveau global : {summary.get('niveau_global', 'N/A')}"),
+                    ft.Text(f"Nombre de statuts : {summary.get('nombre_statuts', 'N/A')}"),
+                ],
+                tight=True,
+            )
+
+            self.learner_summary_panel.content = content
+            self.set_status("Résumé apprenant chargé.")
+            self.page.update()
+
+        except Exception as exc:
+            self.set_status(
+                "Impossible de charger le résumé apprenant. "
+                "Vérifie que l'API expose GET /learners/{id}/summary .",
+                error=True,
+            )
+
+    def simulate_tentative_action(self, e):
+        if not self.learner_dropdown.value:
+            self.set_status("Choisis d'abord un apprenant.", error=True)
+            return
+
+        try:
+            learner_id = int(self.learner_dropdown.value)
+            aav_id = int(self.sim_aav_id_field.value)
+            exercice_id = int(self.sim_exercice_field.value)
+            score = float(self.sim_score_field.value)
+
+            if score < 0 or score > 1:
+                self.set_status("Le score doit être entre 0 et 1.", error=True)
+                return
+
+            payload = {
+                "id_apprenant": learner_id,
+                "id_aav_cible": aav_id,
+                "id_exercice_ou_evenement": exercice_id,
+                "score_obtenu": score,
+            }
+
+            result = self.api.simulate_tentative(payload)
+            self.set_status("Tentative simulée avec succès.")
+            self.load_learner_summary(None)
+
+        except ValueError:
+            self.set_status("Les champs simulation doivent être numériques.", error=True)
+        except Exception as exc:
+            self.set_status(
+                "Impossible de simuler la tentative. "
+                "Vérifie que l'API expose POST /tentatives/simulate .",
+                error=True,
+            )
 
 
 def main(page: ft.Page) -> None:
